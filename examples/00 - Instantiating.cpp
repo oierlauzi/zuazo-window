@@ -8,6 +8,8 @@
 #include <zuazo/Instance.h>
 #include <zuazo/Outputs/Window.h>
 
+#include <mutex>
+
 int main() {
 	/*
 	 * Load all the required window components. This *MUST* be done before instantiating Zuazo
@@ -26,7 +28,9 @@ int main() {
 		Zuazo::Instance::defaultElementLogFunc		//Element log callback
 	};
 	Zuazo::Instance instance(std::move(appInfo));
-	
+	std::unique_lock<Zuazo::Instance> lock(instance);
+
+
 	/*
 	 * Construct the desired video mode
 	 */
@@ -57,7 +61,9 @@ int main() {
 	 */
 	window.open();
 
+	lock.unlock();
 	getchar();
+	lock.lock();
 
 	/*
 	 * Everithing will be destroyed at the end of the scope

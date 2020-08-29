@@ -127,9 +127,12 @@ struct Window::Impl {
 		{
 			writeDescriptorSets();
 			updateUniforms();
+			draw(std::shared_ptr<const Graphics::Frame>()); //Clear the screen
 		}
 
 		~Open() {
+			vertexBuffer.waitCompletion(vulkan);
+			uniformBuffer.waitCompletion(vulkan);
 			waitCompletion();
 		}
 
@@ -315,7 +318,7 @@ struct Window::Impl {
 			uniformBuffer.flushData(
 				vulkan,
 				VIEWPORT_UNIFORM_OFFSET,
-				VIEWPORT_UNIFORM_SIZE,
+				Utils::align(VIEWPORT_UNIFORM_SIZE, 0x100), //TODO be more precise: vk::PhysicalDeviceLimits::nonCoherentAtomSize
 				vulkan.getGraphicsQueueIndex(),
 				vk::AccessFlagBits::eUniformRead,
 				vk::PipelineStageFlagBits::eVertexShader
@@ -334,7 +337,7 @@ struct Window::Impl {
 			uniformBuffer.flushData(
 				vulkan,
 				COLOR_TRANSFER_UNIFORM_OFFSET,
-				COLOR_TRANSFER_UNIFORM_SIZE,
+				Utils::align(COLOR_TRANSFER_UNIFORM_SIZE, 0x100), //TODO be more precise: vk::PhysicalDeviceLimits::nonCoherentAtomSize
 				vulkan.getGraphicsQueueIndex(),
 				vk::AccessFlagBits::eUniformRead,
 				vk::PipelineStageFlagBits::eFragmentShader
@@ -1123,7 +1126,6 @@ struct Window::Impl {
 	std::vector<VideoMode> getVideoModeCompatibility() const {
 		std::vector<VideoMode> result;
 
-		//Only return something if it is opened
 		if(opened) {
 			const VideoMode baseCompatibility(
 				Utils::Any<Rate>(),
@@ -1137,6 +1139,8 @@ struct Window::Impl {
 				Utils::Any<ColorFormat>()
 			);
 
+
+			//Query for full compatibility
 			const auto& vulkan = instance.getVulkan();
 			const auto surfaceFormats = vulkan.getPhysicalDevice().getSurfaceFormatsKHR(*(opened->surface), vulkan.getDispatcher());
 
@@ -1159,7 +1163,33 @@ struct Window::Impl {
 					result.emplace_back(std::move(compatibility));
 				}
 			}
-		} 
+		} else {
+			/*
+			 * This base compatibility has been checked here:
+			 * http://www.vulkan.gpuinfo.org
+			 */
+
+			constexpr ColorFormat supportedFormat = 
+				#ifdef __ANDROID__
+					ColorFormat::R8G8B8A8;
+				#else
+					ColorFormat::B8G8R8A8;
+				#endif	
+
+			const VideoMode compatibility(
+				Utils::Any<Rate>(),
+				Utils::Any<Resolution>(),
+				Utils::MustBe<AspectRatio>(AspectRatio(1, 1)),
+				Utils::MustBe<ColorPrimaries>(ColorPrimaries::BT709),
+				Utils::MustBe<ColorModel>(ColorModel::RGB),
+				Utils::MustBe<ColorTransferFunction>(ColorTransferFunction::IEC61966_2_1),
+				Utils::MustBe<ColorSubsampling>(ColorSubsampling::RB_444),
+				Utils::MustBe<ColorRange>(ColorRange::FULL),
+				Utils::MustBe<ColorFormat>(supportedFormat)
+			);
+
+			result.emplace_back(compatibility);
+		}
 
 		return result;
 	}
@@ -1451,6 +1481,7 @@ Window::Window(	Instance& instance,
 	setOpenCallback(std::bind(&Impl::open, std::ref(*m_impl), std::placeholders::_1));
 	setCloseCallback(std::bind(&Impl::close, std::ref(*m_impl), std::placeholders::_1));
 	setUpdateCallback(std::bind(&Impl::update, std::ref(*m_impl)));
+	setVideoModeCompatibility(m_impl->getVideoModeCompatibility());
 	setVideoModeCallback(std::bind(&Impl::setVideoMode, std::ref(*m_impl), std::placeholders::_1, std::placeholders::_2));
 	setScalingModeCallback(std::bind(&Impl::setScalingMode, std::ref(*m_impl), std::placeholders::_1, std::placeholders::_2));
 	setScalingFilterCallback(std::bind(&Impl::setScalingFilter, std::ref(*m_impl), std::placeholders::_1, std::placeholders::_2));
