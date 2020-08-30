@@ -7,10 +7,12 @@ if(NOT GLSLANGVALIDATOR_EXECUTABLE)
 endif()
 
 #Find Zuazo's shader library
-find_path(ZUAZO_INCLUDE_DIR zuazo/shaders/)
+find_path(ZUAZO_INCLUDE_DIR zuazo/)
 if(NOT ZUAZO_INCLUDE_DIR)
 	message(FATAL_ERROR "Zuazo is not present on the system")
 endif()
+
+message(STATUS "Zuazo found at: ${ZUAZO_INCLUDE_DIR}")
 
 
 

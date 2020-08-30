@@ -2,7 +2,7 @@
  * This example shows how instantiate an output window
  * 
  * How to compile:
- * c++ 00\ -\ Instantiating.cpp -std=c++17 -Wall -Wextra -lzuazo -ldl -lpthread
+ * c++ 00\ -\ Instantiating.cpp -std=c++17 -Wall -Wextra -lzuazo -lzuazo-window -lglfw -ldl -lpthread
  */
 
 #include "TestSource.h"
