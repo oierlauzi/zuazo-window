@@ -10,6 +10,7 @@
 
 #include <tuple>
 #include <vector>
+#include <mutex>
 
 namespace Zuazo::Outputs{
 
@@ -19,7 +20,6 @@ class Window final
 	, public VideoScalerBase
 {
 public:
-	class EventSystem;
 	class Monitor;
 
 	enum class State {
@@ -104,27 +104,19 @@ public:
 	static const Monitor		NO_MONITOR;
 
 	static void					init();
-	static EventSystem&			getEventSystem();
+
 	static std::vector<Monitor>	getMonitors();
 
-private:
-	struct Impl;
-	Utils::Pimpl<Impl>			m_impl;
-
-};
-
-
-
-class Window::EventSystem {
-public:
-
+	static void					pollEvents(std::unique_lock<Instance>& lock);
+	static void					waitEvents(std::unique_lock<Instance>& lock);
+	static void					waitEvents(std::unique_lock<Instance>& lock, Duration timeout);
+	static std::shared_ptr<Instance::ScheduledCallback> enableRegularEventPolling(Instance& instance, Instance::Priority prior = Instance::EVENT_QUERY_PRIORITY);
 
 private:
 	struct Impl;
 	Utils::Pimpl<Impl>			m_impl;
 
 };
-
 
 
 class Window::Monitor {

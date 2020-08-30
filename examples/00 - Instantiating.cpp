@@ -11,14 +11,10 @@
 #include <mutex>
 
 int main() {
-	/*
-	 * Load all the required window components. This *MUST* be done before instantiating Zuazo
-	 */
+	//Load all the required window components. This *MUST* be done before instantiating Zuazo
 	Zuazo::Outputs::Window::init();
 
-	/*
-	 * Instantiate Zuazo as usual
-	 */
+	//Instantiate Zuazo as usual
 	Zuazo::Instance::ApplicationInfo appInfo {
 		"Window Example 00",						//Application's name
 		Zuazo::Version(0, 1, 0),					//Application's version
@@ -30,10 +26,10 @@ int main() {
 	Zuazo::Instance instance(std::move(appInfo));
 	std::unique_lock<Zuazo::Instance> lock(instance);
 
+	//Generaly, you want to enable event polling
+	Zuazo::Outputs::Window::enableRegularEventPolling(instance);
 
-	/*
-	 * Construct the desired video mode
-	 */
+	//Construct the desired video mode
 	const Zuazo::VideoMode videoMode(
 		Zuazo::Utils::MustBe<Zuazo::Rate>(Zuazo::Rate(25, 1)), //Just specify the desired rate
 		Zuazo::Utils::Any<Zuazo::Resolution>(),
@@ -46,9 +42,7 @@ int main() {
 		Zuazo::Utils::Any<Zuazo::ColorFormat>()	
 	);
 
-	/*
-	 * Construct the window object
-	 */
+	//Construct the window object
 	Zuazo::Outputs::Window window(
 		instance, 						//Instance
 		"Output Window",				//Layout name
@@ -56,16 +50,12 @@ int main() {
 		videoMode						//Video mode limits
 	);
 
-	/*
-	 * Open the window (now becomes visible)
-	 */
+	//Open the window (now becomes visible)
 	window.open();
 
+	//Done!
 	lock.unlock();
 	getchar();
 	lock.lock();
 
-	/*
-	 * Everithing will be destroyed at the end of the scope
-	 */
 }

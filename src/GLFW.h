@@ -46,15 +46,10 @@ public:
 
 	static const Monitor NO_MONITOR;
 
-	static void							instantiate();
-	static void							terminate();
+	static void							init();
 	static GLFW&						getGLFW();
 
 private:
-	GLFW();
-	GLFW(const GLFW& other) = delete;
-	GLFW& operator=(const GLFW& other) = delete;
-
 	using MonitorHandle = GLFWmonitor*;
 	using WindowHandle = GLFWwindow*;
 	struct MainThread;
@@ -62,6 +57,11 @@ private:
 
 	MonitorCallback						m_monitorCbk;
 	std::unique_ptr<MainThread>			m_mainThread;
+
+	GLFW();
+	GLFW(const GLFW& other) = delete;
+
+	GLFW& 								operator=(const GLFW& other) = delete;
 
 	static std::unique_ptr<GLFW>		s_instance;
 	

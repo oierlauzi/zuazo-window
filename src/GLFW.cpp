@@ -916,14 +916,9 @@ bool GLFW::getPresentationSupport(	vk::Instance instance,
 
 
 
-void GLFW::instantiate() {
+void GLFW::init() {
 	assert(!s_instance);
 	s_instance = std::unique_ptr<GLFW>(new GLFW());
-}
-
-void GLFW::terminate() {
-	assert(s_instance);
-	s_instance.reset();
 }
 
 GLFW& GLFW::getGLFW() {

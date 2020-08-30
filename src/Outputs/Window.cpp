@@ -288,6 +288,7 @@ struct Window::Impl {
 
 		void resizeFramebuffer(Resolution res) {
 			waitCompletion();
+
 			extent = Graphics::toVulkan(res);
 			geometry.setTargetSize(res);
 			updateViewportUniform();
@@ -310,15 +311,15 @@ struct Window::Impl {
 		}
 
 		void updateViewportUniform() {
-			uniformBuffer.waitCompletion(vulkan);		
-			
+			uniformBuffer.waitCompletion(vulkan);
+
 			auto& size = *(reinterpret_cast<Math::Vec2f*>(uniformBuffer.data() + VIEWPORT_UNIFORM_OFFSET));
 			size = geometry.getTargetSize();
 
 			uniformBuffer.flushData(
 				vulkan,
 				VIEWPORT_UNIFORM_OFFSET,
-				Utils::align(VIEWPORT_UNIFORM_SIZE, 0x100), //TODO be more precise: vk::PhysicalDeviceLimits::nonCoherentAtomSize
+				VIEWPORT_UNIFORM_SIZE,
 				vulkan.getGraphicsQueueIndex(),
 				vk::AccessFlagBits::eUniformRead,
 				vk::PipelineStageFlagBits::eVertexShader
@@ -326,7 +327,7 @@ struct Window::Impl {
 		}
 
 		void updateColorTransferUniform() {
-			uniformBuffer.waitCompletion(vulkan);		
+			uniformBuffer.waitCompletion(vulkan);
 			
 			std::memcpy(
 				uniformBuffer.data() + COLOR_TRANSFER_UNIFORM_OFFSET,
@@ -337,7 +338,7 @@ struct Window::Impl {
 			uniformBuffer.flushData(
 				vulkan,
 				COLOR_TRANSFER_UNIFORM_OFFSET,
-				Utils::align(COLOR_TRANSFER_UNIFORM_SIZE, 0x100), //TODO be more precise: vk::PhysicalDeviceLimits::nonCoherentAtomSize
+				COLOR_TRANSFER_UNIFORM_SIZE,
 				vulkan.getGraphicsQueueIndex(),
 				vk::AccessFlagBits::eUniformRead,
 				vk::PipelineStageFlagBits::eFragmentShader
@@ -1020,7 +1021,8 @@ struct Window::Impl {
 	Signal::Input<Video>						videoIn;
 	std::unique_ptr<Open>						opened;
 
-	static constexpr Instance::Priority PRIORITY = Instance::OUTPUT_PRIORITY;
+	static constexpr auto PRIORITY = Instance::OUTPUT_PRIORITY;
+	static constexpr auto NO_POSTION = Math::Vec2i(std::numeric_limits<int32_t>::min());
 
 	Impl(	Instance& instance,
 			Math::Vec2i size,
@@ -1028,7 +1030,7 @@ struct Window::Impl {
 		: instance(instance)
 		, windowName(instance.getApplicationInfo().name)
 		, size(size)
-		, position(0, 0)
+		, position(NO_POSTION)
 		, state(State::NORMAL)
 		, opacity(1.0f)
 		, resizeable(true)
@@ -1067,7 +1069,7 @@ struct Window::Impl {
 		//Set everything as desired
 		//opened->window.setName(windowName); //Already set when constructing
 		//opened->window.setSize(size); //Already set when constructing
-		opened->window.setPosition(position);
+		if(position != NO_POSTION) opened->window.setPosition(position);
 		opened->window.setState(toGLFW(state));
 		opened->window.setOpacity(opacity);
 		opened->window.setResizeable(resizeable);
@@ -1335,6 +1337,8 @@ struct Window::Impl {
 	bool getDecorated() const {
 		return decorated;
 	}
+
+
 
 private:
 	GLFW::Window::Callbacks createCallbacks() {
@@ -1621,9 +1625,50 @@ bool Window::getDecorated() const {
 
 
 void Window::init() {
-	GLFW::instantiate();
+	GLFW::init();
 }
 
-//Window::EventSystem& Window::getEventSystem();
 //std::vector<Window::Monitor> Window::getMonitors();
+
+void Window::pollEvents(std::unique_lock<Instance>& lock) {
+	assert(lock.owns_lock());
+	lock.unlock();
+
+	GLFW::getGLFW().pollEvents();
+
+	lock.lock();
+}
+
+void Window::waitEvents(std::unique_lock<Instance>& lock) {
+	assert(lock.owns_lock());
+	lock.unlock();
+
+	GLFW::getGLFW().waitEvents();
+	
+	lock.lock();
+}
+
+void Window::waitEvents(std::unique_lock<Instance>& lock, Duration timeout) {
+	assert(lock.owns_lock());
+	lock.unlock();
+
+	GLFW::getGLFW().waitEvents(timeout);
+	
+	lock.lock();
+}
+
+std::shared_ptr<Instance::ScheduledCallback> Window::enableRegularEventPolling(Instance& instance, Instance::Priority prior) {
+	auto callback = std::make_shared<Instance::ScheduledCallback>(
+		[&instance] {
+			//As it is being called from the loop, instance should be locked by this thread
+			std::unique_lock<Instance> lock(instance, std::adopt_lock);
+			Window::pollEvents(lock);
+			lock.release(); //Leave it locked
+		}
+	);
+
+	instance.addRegularCallback(callback, prior);
+	return callback;
+}
+
 }
