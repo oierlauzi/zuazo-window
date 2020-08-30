@@ -92,9 +92,6 @@ struct Window::Impl {
 				Math::Vec2i size,
 				std::string_view name,
 				GLFW::Window::Callbacks cbks,
-				vk::Format format,
-				vk::ColorSpaceKHR colorSpace,
-				Graphics::ColorTransfer colorTransfer,
 				ScalingMode scalingMode,
 				ScalingFilter scalingFilter ) 
 			: vulkan(vulkan)
@@ -111,18 +108,18 @@ struct Window::Impl {
 			, renderFinishedFence(vulkan.createFence(true))
 
 			, extent(Graphics::toVulkan(window.getResolution()))
-			, format(format)
-			, colorSpace(colorSpace)
-			, colorTransfer(std::move(colorTransfer))
+			, format(vk::Format::eUndefined)
+			, colorSpace(static_cast<vk::ColorSpaceKHR>(-1))
+			, colorTransfer()
 			, filter(Graphics::toVulkan(scalingFilter))
 			, geometry(createGeometry(vertexBuffer.data(), scalingMode, Math::Vec2f(extent.width, extent.height)))
 
-			, swapchain(createSwapchain(vulkan, *surface, extent, format, colorSpace, {}))
-			, swapchainImageViews(createImageViews(vulkan, *swapchain, format))
-			, renderPass(createRenderPass(vulkan, format))
-			, framebuffers(createFramebuffers(vulkan, *renderPass, swapchainImageViews, extent))
+			, swapchain()
+			, swapchainImageViews()
+			, renderPass()
+			, framebuffers()
 			, pipelineLayout(createPipelineLayout(vulkan, filter))
-			, pipeline(createPipeline(vulkan, *renderPass, pipelineLayout, extent))
+			, pipeline()
 
 		{
 			writeDescriptorSets();
@@ -1048,10 +1045,7 @@ struct Window::Impl {
 		assert(!opened);
 
 		Window& win = static_cast<Window&>(base);
-		const auto& videoMode = win.getVideoMode();
-
 		const auto& vulkan = instance.getVulkan();
-		auto [format, colorSpace, colorTransfer] = convertParameters(vulkan, videoMode);
 
 		//Try to open it
 		opened = std::make_unique<Impl::Open>(
@@ -1059,9 +1053,6 @@ struct Window::Impl {
 			size,
 			windowName,
 			createCallbacks(),
-			format,
-			colorSpace,
-			std::move(colorTransfer),
 			win.getScalingMode(),
 			win.getScalingFilter()
 		);
@@ -1075,8 +1066,10 @@ struct Window::Impl {
 		opened->window.setResizeable(resizeable);
 		opened->window.setDecorated(decorated);
 
-		win.enablePeriodicUpdate(PRIORITY, getPeriod(videoMode.getFrameRateValue()));
 		win.setVideoModeCompatibility(getVideoModeCompatibility());
+
+		//Timing will be enabled on the setVideoMode() callback
+		//win.enablePeriodicUpdate(PRIORITY, getPeriod(videoMode.getFrameRateValue())); 
 
 		hasChanged = true;
 	}
@@ -1138,7 +1131,7 @@ struct Window::Impl {
 		if(opened) {
 			const VideoMode baseCompatibility(
 				Utils::Any<Rate>(),
-				Utils::MustBe<Resolution>(opened->window.getResolution()),
+				Utils::MustBe<Resolution>(Graphics::fromVulkan(opened->extent)),
 				Utils::MustBe<AspectRatio>(AspectRatio(1, 1)),
 				Utils::Any<ColorPrimaries>(),
 				Utils::MustBe<ColorModel>(ColorModel::RGB),
@@ -1147,7 +1140,6 @@ struct Window::Impl {
 				Utils::MustBe<ColorRange>(ColorRange::FULL),
 				Utils::Any<ColorFormat>()
 			);
-
 
 			//Query for full compatibility
 			const auto& vulkan = instance.getVulkan();
@@ -1172,34 +1164,13 @@ struct Window::Impl {
 					result.emplace_back(std::move(compatibility));
 				}
 			}
-		} else {
-			/*
-			 * This base compatibility has been checked here:
-			 * http://www.vulkan.gpuinfo.org
-			 */
 
-			constexpr ColorFormat supportedFormat = 
-				#ifdef __ANDROID__
-					ColorFormat::R8G8B8A8;
-				#else
-					ColorFormat::B8G8R8A8;
-				#endif	
-
-			const VideoMode compatibility(
-				Utils::Any<Rate>(),
-				Utils::Any<Resolution>(),
-				Utils::MustBe<AspectRatio>(AspectRatio(1, 1)),
-				Utils::MustBe<ColorPrimaries>(ColorPrimaries::BT709),
-				Utils::MustBe<ColorModel>(ColorModel::RGB),
-				Utils::MustBe<ColorTransferFunction>(ColorTransferFunction::IEC61966_2_1),
-				Utils::MustBe<ColorSubsampling>(ColorSubsampling::RB_444),
-				Utils::MustBe<ColorRange>(ColorRange::FULL),
-				Utils::MustBe<ColorFormat>(supportedFormat)
-			);
-
-			result.emplace_back(compatibility);
+			if(result.size() == 0) {
+				//There must be at least one compatibility, even if it is invalid
+				result.emplace_back();
+			}
 		}
-
+		
 		return result;
 	}
 
