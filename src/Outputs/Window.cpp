@@ -1101,18 +1101,22 @@ struct Window::Impl {
 
 			win.disablePeriodicUpdate();
 			win.enablePeriodicUpdate(PRIORITY, getPeriod(videoMode.getFrameRateValue()));
+
+			hasChanged = true;
 		}
 	}
 
 	void setScalingMode(VideoScalerBase&, ScalingMode mode) {
 		if(opened) {
 			opened->setScalingMode(mode);
+			hasChanged = true;
 		}
 	}
 
 	void setScalingFilter(VideoScalerBase&, ScalingFilter filter) {
 		if(opened) {
 			opened->setScalingFilter(filter);
+			hasChanged = true;
 		}
 	}
 
