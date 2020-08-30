@@ -5,6 +5,8 @@
  * c++ 00\ -\ Instantiating.cpp -std=c++17 -Wall -Wextra -lzuazo -ldl -lpthread
  */
 
+#include "TestSource.h"
+
 #include <zuazo/Instance.h>
 #include <zuazo/Outputs/Window.h>
 
@@ -53,9 +55,25 @@ int main() {
 	//Open the window (now becomes visible)
 	window.open();
 
+	//Let's route a test source to it
+	const Zuazo::VideoMode testVideoMode(
+		Zuazo::Utils::MustBe<Zuazo::Rate>(Zuazo::Rate(25, 1)), //Just specify the desired rate
+		Zuazo::Utils::MustBe<Zuazo::Resolution>(Zuazo::Resolution(1280, 720)),
+		Zuazo::Utils::MustBe<Zuazo::AspectRatio>(Zuazo::AspectRatio(1, 1)),
+		Zuazo::Utils::MustBe<Zuazo::ColorPrimaries>(Zuazo::ColorPrimaries::BT709),
+		Zuazo::Utils::MustBe<Zuazo::ColorModel>(Zuazo::ColorModel::RGB),
+		Zuazo::Utils::MustBe<Zuazo::ColorTransferFunction>(Zuazo::ColorTransferFunction::IEC61966_2_1),
+		Zuazo::Utils::MustBe<Zuazo::ColorSubsampling>(Zuazo::ColorSubsampling::RB_444),
+		Zuazo::Utils::MustBe<Zuazo::ColorRange>(Zuazo::ColorRange::FULL),
+		Zuazo::Utils::MustBe<Zuazo::ColorFormat>(Zuazo::ColorFormat::B8G8R8A8)	
+	);
+
+	TestSource testSrc(instance, "", testVideoMode);
+	testSrc.open();
+	Zuazo::Signal::getInput<Zuazo::Video>(window) << Zuazo::Signal::getOutput<Zuazo::Video>(testSrc);
+
 	//Done!
 	lock.unlock();
 	getchar();
 	lock.lock();
-
 }

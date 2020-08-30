@@ -127,7 +127,6 @@ struct Window::Impl {
 		{
 			writeDescriptorSets();
 			updateUniforms();
-			draw(std::shared_ptr<const Graphics::Frame>()); //Clear the screen
 		}
 
 		~Open() {
@@ -1020,6 +1019,7 @@ struct Window::Impl {
 	
 	Signal::Input<Video>						videoIn;
 	std::unique_ptr<Open>						opened;
+	bool										hasChanged;
 
 	static constexpr auto PRIORITY = Instance::OUTPUT_PRIORITY;
 	static constexpr auto NO_POSTION = Math::Vec2i(std::numeric_limits<int32_t>::min());
@@ -1077,6 +1077,8 @@ struct Window::Impl {
 
 		win.enablePeriodicUpdate(PRIORITY, getPeriod(videoMode.getFrameRateValue()));
 		win.setVideoModeCompatibility(getVideoModeCompatibility());
+
+		hasChanged = true;
 	}
 
 	void close(ZuazoBase& base) {
@@ -1117,12 +1119,13 @@ struct Window::Impl {
 	void update() {
 		assert(opened);
 
-		if(videoIn.hasChanged()) {
+		if(hasChanged || videoIn.hasChanged()) {
 			//Input has changed, pull a frame from it
 			const auto& frame = videoIn.pull();
 			opened->draw(frame);
-			
 		}
+
+		hasChanged = false;
 	}
 
 	std::vector<VideoMode> getVideoModeCompatibility() const {
@@ -1359,6 +1362,8 @@ private:
 		std::lock_guard<Instance> lock(instance);
 		opened->resizeFramebuffer(res);
 		//TODO update compatibility and remove the above line
+
+		hasChanged = true;
 	}
 
 	void sizeCallback(Math::Vec2i s) {
