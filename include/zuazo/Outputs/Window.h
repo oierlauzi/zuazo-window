@@ -49,6 +49,7 @@ public:
 	Window(	Instance& instance, 
 			std::string name, 
 			Math::Vec2i size = Math::Vec2i(640, 480),
+			const Monitor& mon = NO_MONITOR,
 			VideoMode videoMode = VideoMode::ANY,
 			Callbacks cbks = {} );
 	Window(const Window& other) = delete;
@@ -97,9 +98,8 @@ public:
 	void						setDecorated(bool deco);
 	bool						getDecorated() const;
 
-	/*void						setMonitor(const Monitor& mon);
-	void						setMonitor(const Monitor& mon, const Monitor::Mode& mode);
-	Monitor						getMonitor() const;*/
+	void						setMonitor(const Monitor& mon);
+	Monitor						getMonitor() const;
 
 	static const Monitor		NO_MONITOR;
 
@@ -110,7 +110,7 @@ public:
 	static void					pollEvents(std::unique_lock<Instance>& lock);
 	static void					waitEvents(std::unique_lock<Instance>& lock);
 	static void					waitEvents(std::unique_lock<Instance>& lock, Duration timeout);
-	static std::shared_ptr<Instance::ScheduledCallback> enableRegularEventPolling(Instance& instance, Instance::Priority prior = Instance::EVENT_QUERY_PRIORITY);
+	static std::shared_ptr<Instance::ScheduledCallback> enableRegularEventPolling(Instance& instance);
 
 private:
 	struct Impl;
@@ -120,12 +120,26 @@ private:
 
 
 class Window::Monitor {
+	friend Window::Impl;
 public:
+	Monitor();
+	Monitor(const Monitor& other) = delete;
+	Monitor(Monitor&& other);
+	~Monitor();
 
+	Monitor&					operator=(const Monitor& other) = delete;
+	Monitor&					operator=(Monitor&& other);
+
+	std::string_view			getName() const;
+	Math::Vec2i					getSize() const;
+	Math::Vec2i					getPosition() const;
+	Math::Vec2d					getPhysicalSize() const;
 
 private:
 	struct Impl;
 	Utils::Pimpl<Impl>			m_impl;
+
+	Monitor(Utils::Pimpl<Impl> pimpl);
 
 };
 

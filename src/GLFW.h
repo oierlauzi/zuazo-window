@@ -76,7 +76,7 @@ public:
 	struct Mode {
 		ColorDepth colorDepth;
 		Math::Vec2i size;
-		Rate frameRate;
+		int frameRate;
 	};
 
 	Monitor(MonitorHandle mon);
@@ -87,7 +87,7 @@ public:
 
 	operator bool() const;
 
-	std::string                         getName() const;
+	std::string_view                    getName() const;
 	Math::Vec2i                         getPosition() const;
 	Math::Vec2d                         getPhysicalSize() const;
 	Mode                                getMode() const;
@@ -133,6 +133,7 @@ public:
 	Window(WindowHandle handle);
 	Window(	Math::Vec2i size, 
 			std::string_view name,
+			Monitor mon = NO_MONITOR,
 			Callbacks cbk = {} );
 	Window(const Window& other) = delete;
 	Window(Window&& other);

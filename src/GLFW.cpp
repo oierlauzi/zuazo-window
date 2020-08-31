@@ -267,7 +267,7 @@ struct GLFW::MainThread {
 		return execute(isValidImpl, mon);
 	}
 
-	std::string getName(MonitorHandle mon){
+	std::string_view getName(MonitorHandle mon){
 		return execute(getNameImpl, mon);
 	}
 
@@ -291,11 +291,12 @@ struct GLFW::MainThread {
 	//Window stuff
 	GLFW::WindowHandle createWindow(const Math::Vec2i& size, 
 									std::string_view name,
+									Monitor mon,
 									Window* usrPtr )
 	{
 		return execute(
 			std::mem_fn(&MainThread::createWindowImpl),
-			this, size, name, usrPtr
+			this, size, name, mon, usrPtr
 		);
 	}
 
@@ -552,9 +553,9 @@ private:
 		return std::find(start, end, mon) != end;
 	}
 
-	static std::string getNameImpl(MonitorHandle mon){
+	static std::string_view getNameImpl(MonitorHandle mon){
 		assert(isValidImpl(mon));
-		return std::string(glfwGetMonitorName(mon));
+		return std::string_view(glfwGetMonitorName(mon));
 	}
 
 	static Math::Vec2i getMonitorPositionImpl(MonitorHandle mon){
@@ -580,7 +581,7 @@ private:
 		return Monitor::Mode{
 			Monitor::ColorDepth(mod->redBits, mod->greenBits, mod->blueBits),
 			Math::Vec2i(mod->width, mod->height),
-			Rate(mod->refreshRate, 1)
+			mod->refreshRate
 		};
 	}
 
@@ -596,7 +597,7 @@ private:
 			modes.emplace_back(Monitor::Mode{
 				Monitor::ColorDepth(mod[i].redBits, mod[i].greenBits, mod[i].blueBits),
 				Math::Vec2i(mod[i].width, mod[i].height),
-				Rate(mod[i].refreshRate, 1)
+				mod[i].refreshRate
 			});
 		}
 
@@ -608,6 +609,7 @@ private:
 	//Window implementations
 	GLFW::WindowHandle createWindowImpl(Math::Vec2i size, 
 										std::string_view name,
+										Monitor mon,
 										Window* usrPtr )
 	{
 		//Set Vulkan compatibility
@@ -617,7 +619,7 @@ private:
 		WindowHandle win = glfwCreateWindow(
 			size.x, size.y,
 			name.data(),
-			static_cast<MonitorHandle>(nullptr),
+			mon.m_monitor,
 			static_cast<WindowHandle>(nullptr)
 		);
 
@@ -756,7 +758,7 @@ private:
 					pos.y,
 					mode.size.x,
 					mode.size.y,
-					static_cast<int>(mode.frameRate)
+					mode.frameRate
 				);
 			} else {
 				//It is going to be windowed
@@ -940,7 +942,7 @@ GLFW::Monitor::operator bool() const {
 	return getGLFW().m_mainThread->isValid(m_monitor);
 }
 
-std::string GLFW::Monitor::getName() const {
+std::string_view GLFW::Monitor::getName() const {
 	return getGLFW().m_mainThread->getName(m_monitor);
 }
 
@@ -973,8 +975,9 @@ GLFW::Window::Window(WindowHandle handle)
 
 GLFW::Window::Window(	Math::Vec2i size, 
 						std::string_view name,
+						Monitor mon,
 						Callbacks callbacks )
-	: m_window(getGLFW().m_mainThread->createWindow(size, name, this))
+	: m_window(getGLFW().m_mainThread->createWindow(size, name, mon, this))
 	, m_callbacks(std::move(callbacks))
 {
 	if(m_window == nullptr){

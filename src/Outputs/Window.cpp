@@ -21,6 +21,82 @@
 namespace Zuazo::Outputs {
 
 /*
+ * Window::Monitor::Impl
+ */
+
+struct Window::Monitor::Impl {
+	GLFW::Monitor monitor;
+
+	Impl()
+		: monitor(nullptr)
+	{
+	}
+
+	Impl(GLFW::Monitor mon)
+		: monitor(std::move(mon))
+	{
+	}
+
+	~Impl() = default;
+
+	std::string_view getName() const {
+		return monitor.getName();
+	}
+
+	Math::Vec2i getSize() const {
+		return monitor.getMode().size;
+	}
+
+	Math::Vec2i getPosition() const {
+		return monitor.getPosition();
+	}
+
+	Math::Vec2d getPhysicalSize() const {
+		return monitor.getPhysicalSize();
+	}
+
+};
+
+/*
+ * Window::Monitor
+ */
+
+Window::Monitor::Monitor()
+	: m_impl({})
+{
+}
+
+Window::Monitor::Monitor(Utils::Pimpl<Impl> pimpl)
+	: m_impl(std::move(pimpl))
+{
+}
+
+Window::Monitor::Monitor(Monitor&& other) = default;
+
+Window::Monitor::~Monitor() = default;
+
+Window::Monitor& Window::Monitor::operator=(Monitor&& other) = default;
+
+
+
+std::string_view Window::Monitor::getName() const {
+	return m_impl->getName();
+}
+
+Math::Vec2i Window::Monitor::getSize() const {
+	return m_impl->getSize();
+}
+
+Math::Vec2i Window::Monitor::getPosition() const {
+	return m_impl->getPosition();
+}
+
+Math::Vec2d Window::Monitor::getPhysicalSize() const {
+	return m_impl->getPhysicalSize();
+}
+
+
+/*
  * Window::Impl
  */
 struct Window::Impl {
@@ -91,11 +167,12 @@ struct Window::Impl {
 		Open(	const Graphics::Vulkan& vulkan,
 				Math::Vec2i size,
 				std::string_view name,
+				GLFW::Monitor mon,
 				GLFW::Window::Callbacks cbks,
 				ScalingMode scalingMode,
 				ScalingFilter scalingFilter ) 
 			: vulkan(vulkan)
-			, window(size, name, std::move(cbks))
+			, window(size, name, mon, std::move(cbks))
 			, surface(window.getSurface(vulkan))
 			, commandPool(createCommandPool(vulkan))
 			, commandBuffer(createCommandBuffer(vulkan, *commandPool))
@@ -1011,6 +1088,7 @@ struct Window::Impl {
 	float										opacity;
 	bool										resizeable;
 	bool										decorated;
+	GLFW::Monitor								monitor;
 
 	Callbacks									callbacks;
 	
@@ -1023,6 +1101,7 @@ struct Window::Impl {
 
 	Impl(	Instance& instance,
 			Math::Vec2i size,
+			const Monitor& mon,
 			Callbacks callbacks)
 		: instance(instance)
 		, windowName(instance.getApplicationInfo().name)
@@ -1032,6 +1111,7 @@ struct Window::Impl {
 		, opacity(1.0f)
 		, resizeable(true)
 		, decorated(true)
+		, monitor(getGLFWMonitor(mon))
 		, callbacks(std::move(callbacks))
 		, videoIn(std::string(Signal::makeInputName<Video>()))
 	{
@@ -1052,6 +1132,7 @@ struct Window::Impl {
 			vulkan,
 			size,
 			windowName,
+			monitor,
 			createCallbacks(),
 			win.getScalingMode(),
 			win.getScalingFilter()
@@ -1191,7 +1272,10 @@ struct Window::Impl {
 	void setSize(Math::Vec2i s) {
 		if(size != s) {
 			size = s;
-			if(opened) opened->window.setSize(size);
+			if(opened) {
+				opened->window.setSize(size);
+				opened->resizeFramebuffer(opened->window.getResolution());
+			}
 		}
 	}
 
@@ -1316,7 +1400,27 @@ struct Window::Impl {
 		return decorated;
 	}
 
+	void setMonitor(const Monitor& mon) {
+		monitor = getGLFWMonitor(mon);
 
+		if(opened) {
+			opened->window.setMonitor(monitor);
+			size = opened->window.getSize();
+			opened->resizeFramebuffer(opened->window.getResolution());
+		}
+	}
+	
+	Monitor getMonitor() const {
+		return constructMonitor(monitor);
+	}
+
+	static Monitor constructMonitor(GLFW::Monitor mon) {
+		return Monitor(Utils::Pimpl<Monitor::Impl>({}, std::move(mon)));
+	}
+
+	static GLFW::Monitor getGLFWMonitor(const Monitor& mon) {
+		return mon.m_impl->monitor;
+	}
 
 private:
 	GLFW::Window::Callbacks createCallbacks() {
@@ -1451,15 +1555,18 @@ private:
  * Window
  */
 
+const Window::Monitor Window::NO_MONITOR = Window::Monitor();
+
 Window::Window(	Instance& instance, 
 				std::string name, 
 				Math::Vec2i size,
+				const Monitor& mon,
 				VideoMode videoMode,
 				Callbacks cbks )
 	: ZuazoBase(instance, std::move(name))
 	, VideoBase(std::move(videoMode))
 	, VideoScalerBase()
-	, m_impl({}, instance, size, std::move(cbks))
+	, m_impl({}, instance, size, mon, std::move(cbks))
 {
 	Layout::registerPad(m_impl->videoIn);
 	setOpenCallback(std::bind(&Impl::open, std::ref(*m_impl), std::placeholders::_1));
@@ -1603,12 +1710,32 @@ bool Window::getDecorated() const {
 }
 
 
+void Window::setMonitor(const Monitor& mon) {
+	m_impl->setMonitor(mon);
+}
+
+Window::Monitor Window::getMonitor() const {
+	return m_impl->getMonitor();
+}
+
+
+
 
 void Window::init() {
 	GLFW::init();
 }
 
-//std::vector<Window::Monitor> Window::getMonitors();
+std::vector<Window::Monitor> Window::getMonitors() {
+	const auto monitors = GLFW::getGLFW().getMonitors();
+	std::vector<Window::Monitor> result;
+	result.reserve(monitors.size());
+
+	for(const auto& mon : monitors) {
+		result.push_back(Impl::constructMonitor(mon));
+	}
+
+	return result;
+}
 
 void Window::pollEvents(std::unique_lock<Instance>& lock) {
 	assert(lock.owns_lock());
@@ -1637,7 +1764,7 @@ void Window::waitEvents(std::unique_lock<Instance>& lock, Duration timeout) {
 	lock.lock();
 }
 
-std::shared_ptr<Instance::ScheduledCallback> Window::enableRegularEventPolling(Instance& instance, Instance::Priority prior) {
+std::shared_ptr<Instance::ScheduledCallback> Window::enableRegularEventPolling(Instance& instance) {
 	auto callback = std::make_shared<Instance::ScheduledCallback>(
 		[&instance] {
 			//As it is being called from the loop, instance should be locked by this thread
@@ -1647,7 +1774,8 @@ std::shared_ptr<Instance::ScheduledCallback> Window::enableRegularEventPolling(I
 		}
 	);
 
-	instance.addRegularCallback(callback, prior);
+	//This callback must be the last one, as it unlocks the instance, which might be dangerous
+	instance.addRegularCallback(callback, Instance::LOWEST_PRIORITY);
 	return callback;
 }
 
