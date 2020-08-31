@@ -43,16 +43,20 @@ struct Window::Monitor::Impl {
 		return monitor.getName();
 	}
 
+	Math::Vec2d getPhysicalSize() const {
+		return monitor.getPhysicalSize();
+	}
+
 	Math::Vec2i getSize() const {
-		return monitor.getMode().size;
+		return monitor.getSize();
 	}
 
 	Math::Vec2i getPosition() const {
 		return monitor.getPosition();
 	}
 
-	Math::Vec2d getPhysicalSize() const {
-		return monitor.getPhysicalSize();
+	Rate getFrameRate() const {
+		return Rate(monitor.getFrameRate(), 1);
 	}
 
 };
@@ -83,6 +87,10 @@ std::string_view Window::Monitor::getName() const {
 	return m_impl->getName();
 }
 
+Math::Vec2d Window::Monitor::getPhysicalSize() const {
+	return m_impl->getPhysicalSize();
+}
+
 Math::Vec2i Window::Monitor::getSize() const {
 	return m_impl->getSize();
 }
@@ -91,8 +99,8 @@ Math::Vec2i Window::Monitor::getPosition() const {
 	return m_impl->getPosition();
 }
 
-Math::Vec2d Window::Monitor::getPhysicalSize() const {
-	return m_impl->getPhysicalSize();
+Rate Window::Monitor::getFrameRate() const {
+	return m_impl->getFrameRate();
 }
 
 
@@ -1210,8 +1218,12 @@ struct Window::Impl {
 		std::vector<VideoMode> result;
 
 		if(opened) {
+			//Select a monitor to depend on
+			const auto& mon = monitor ? monitor : GLFW::getGLFW().getPrimaryMonitor();
+
+			//Construct a base capability struct which will be common to all compatibilities
 			const VideoMode baseCompatibility(
-				Utils::Any<Rate>(),
+				Utils::Range<Rate>(Rate(0, 1), Rate(mon.getMode().frameRate, 1)),
 				Utils::MustBe<Resolution>(Graphics::fromVulkan(opened->extent)),
 				Utils::MustBe<AspectRatio>(AspectRatio(1, 1)),
 				Utils::Any<ColorPrimaries>(),
@@ -1414,12 +1426,71 @@ struct Window::Impl {
 		return constructMonitor(monitor);
 	}
 
-	static Monitor constructMonitor(GLFW::Monitor mon) {
-		return Monitor(Utils::Pimpl<Monitor::Impl>({}, std::move(mon)));
+
+	static void init() {
+		GLFW::init();
 	}
 
-	static GLFW::Monitor getGLFWMonitor(const Monitor& mon) {
-		return mon.m_impl->monitor;
+
+
+	static Monitor getPrimaryMonitor() {
+		return Impl::constructMonitor(GLFW::getGLFW().getPrimaryMonitor());
+	}
+
+	static std::vector<Monitor> getMonitors() {
+		const auto monitors = GLFW::getGLFW().getMonitors();
+		std::vector<Window::Monitor> result;
+		result.reserve(monitors.size());
+
+		for(const auto& mon : monitors) {
+			result.push_back(constructMonitor(mon));
+		}
+
+		return result;
+	}
+
+
+
+	static void pollEvents(std::unique_lock<Instance>& lock) {
+		assert(lock.owns_lock());
+		lock.unlock();
+
+		GLFW::getGLFW().pollEvents();
+
+		lock.lock();
+	}
+
+	static void waitEvents(std::unique_lock<Instance>& lock) {
+		assert(lock.owns_lock());
+		lock.unlock();
+
+		GLFW::getGLFW().waitEvents();
+		
+		lock.lock();
+	}
+
+	static void waitEvents(std::unique_lock<Instance>& lock, Duration timeout) {
+		assert(lock.owns_lock());
+		lock.unlock();
+
+		GLFW::getGLFW().waitEvents(timeout);
+		
+		lock.lock();
+	}
+
+	static std::shared_ptr<Instance::ScheduledCallback> enableRegularEventPolling(Instance& instance) {
+		auto callback = std::make_shared<Instance::ScheduledCallback>(
+			[&instance] {
+				//As it is being called from the loop, instance should be locked by this thread
+				std::unique_lock<Instance> lock(instance, std::adopt_lock);
+				Window::pollEvents(lock);
+				lock.release(); //Leave it locked
+			}
+		);
+
+		//This callback must be the last one, as it unlocks the instance, which might be dangerous
+		instance.addRegularCallback(callback, Instance::LOWEST_PRIORITY);
+		return callback;
 	}
 
 private:
@@ -1548,6 +1619,14 @@ private:
 		default: return static_cast<Window::State>(state);
 		}
 	}
+
+	static Monitor constructMonitor(GLFW::Monitor mon) {
+		return Monitor(Utils::Pimpl<Monitor::Impl>({}, std::move(mon)));
+	}
+
+	static GLFW::Monitor getGLFWMonitor(const Monitor& mon) {
+		return mon.m_impl->monitor;
+	}
 };
 
 
@@ -1559,9 +1638,9 @@ const Window::Monitor Window::NO_MONITOR = Window::Monitor();
 
 Window::Window(	Instance& instance, 
 				std::string name, 
+				VideoMode videoMode,
 				Math::Vec2i size,
 				const Monitor& mon,
-				VideoMode videoMode,
 				Callbacks cbks )
 	: ZuazoBase(instance, std::move(name))
 	, VideoBase(std::move(videoMode))
@@ -1572,10 +1651,11 @@ Window::Window(	Instance& instance,
 	setOpenCallback(std::bind(&Impl::open, std::ref(*m_impl), std::placeholders::_1));
 	setCloseCallback(std::bind(&Impl::close, std::ref(*m_impl), std::placeholders::_1));
 	setUpdateCallback(std::bind(&Impl::update, std::ref(*m_impl)));
-	setVideoModeCompatibility(m_impl->getVideoModeCompatibility());
 	setVideoModeCallback(std::bind(&Impl::setVideoMode, std::ref(*m_impl), std::placeholders::_1, std::placeholders::_2));
 	setScalingModeCallback(std::bind(&Impl::setScalingMode, std::ref(*m_impl), std::placeholders::_1, std::placeholders::_2));
 	setScalingFilterCallback(std::bind(&Impl::setScalingFilter, std::ref(*m_impl), std::placeholders::_1, std::placeholders::_2));
+
+	setVideoModeCompatibility(m_impl->getVideoModeCompatibility());
 }
 
 Window::Window(Window&& other) = default;
@@ -1722,61 +1802,35 @@ Window::Monitor Window::getMonitor() const {
 
 
 void Window::init() {
-	GLFW::init();
+	Impl::init();
+}
+
+
+
+Window::Monitor Window::getPrimaryMonitor() {
+	return Impl::getPrimaryMonitor();
 }
 
 std::vector<Window::Monitor> Window::getMonitors() {
-	const auto monitors = GLFW::getGLFW().getMonitors();
-	std::vector<Window::Monitor> result;
-	result.reserve(monitors.size());
-
-	for(const auto& mon : monitors) {
-		result.push_back(Impl::constructMonitor(mon));
-	}
-
-	return result;
+	return Impl::getMonitors();
 }
 
+
+
 void Window::pollEvents(std::unique_lock<Instance>& lock) {
-	assert(lock.owns_lock());
-	lock.unlock();
-
-	GLFW::getGLFW().pollEvents();
-
-	lock.lock();
+	Impl::pollEvents(lock);
 }
 
 void Window::waitEvents(std::unique_lock<Instance>& lock) {
-	assert(lock.owns_lock());
-	lock.unlock();
-
-	GLFW::getGLFW().waitEvents();
-	
-	lock.lock();
+	Impl::waitEvents(lock);
 }
 
 void Window::waitEvents(std::unique_lock<Instance>& lock, Duration timeout) {
-	assert(lock.owns_lock());
-	lock.unlock();
-
-	GLFW::getGLFW().waitEvents(timeout);
-	
-	lock.lock();
+	Impl::waitEvents(lock, timeout);
 }
 
 std::shared_ptr<Instance::ScheduledCallback> Window::enableRegularEventPolling(Instance& instance) {
-	auto callback = std::make_shared<Instance::ScheduledCallback>(
-		[&instance] {
-			//As it is being called from the loop, instance should be locked by this thread
-			std::unique_lock<Instance> lock(instance, std::adopt_lock);
-			Window::pollEvents(lock);
-			lock.release(); //Leave it locked
-		}
-	);
-
-	//This callback must be the last one, as it unlocks the instance, which might be dangerous
-	instance.addRegularCallback(callback, Instance::LOWEST_PRIORITY);
-	return callback;
+	return Impl::enableRegularEventPolling(instance);
 }
 
 }

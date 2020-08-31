@@ -49,17 +49,17 @@ int main() {
 	Zuazo::Outputs::Window window1(
 		instance, 						//Instance
 		"Output Window 1",				//Layout name
+		videoMode,						//Video mode limits
 		Zuazo::Math::Vec2i(1280, 720),	//Window size (in screen coordinates)
-		Zuazo::Outputs::Window::NO_MONITOR, //No monitor
-		videoMode						//Video mode limits
+		Zuazo::Outputs::Window::NO_MONITOR //No monitor
 	);
 
 	Zuazo::Outputs::Window window2(
 		instance, 						//Instance
 		"Output Window 2",				//Layout name
+		videoMode,						//Video mode limits
 		Zuazo::Math::Vec2i(1280, 720),	//Window size (in screen coordinates)
-		Zuazo::Outputs::Window::NO_MONITOR, //No monitor
-		videoMode						//Video mode limits
+		Zuazo::Outputs::Window::NO_MONITOR //No monitor
 	);
 
 

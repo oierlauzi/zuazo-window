@@ -35,7 +35,7 @@ int main() {
 
 	//Construct the desired video mode
 	const Zuazo::VideoMode videoMode(
-		Zuazo::Utils::MustBe<Zuazo::Rate>(Zuazo::Rate(25, 1)), //Just specify the desired rate
+		Zuazo::Utils::MustBe<Zuazo::Rate>(Zuazo::Rate(30, 1)), //Just specify the desired rate
 		Zuazo::Utils::Any<Zuazo::Resolution>(),
 		Zuazo::Utils::Any<Zuazo::AspectRatio>(),
 		Zuazo::Utils::Any<Zuazo::ColorPrimaries>(),
@@ -60,9 +60,10 @@ int main() {
 	Zuazo::Outputs::Window window(
 		instance, 						//Instance
 		"Output Window",				//Layout name
+		videoMode,						//Video mode limits
 		Zuazo::Math::Vec2i(1280, 720),	//Window size (in screen coordinates).
-		Zuazo::Outputs::Window::NO_MONITOR, //The monitor
-		videoMode						//Video mode limits
+		Zuazo::Outputs::Window::NO_MONITOR //The monitor
+		
 	);
 
 	//Open the window (now becomes visible)
@@ -104,8 +105,15 @@ int main() {
 
 	window.setMonitor(monitors[monitorSelection]);
 
-	//Done!
 	lock.unlock();
 	std::this_thread::sleep_for(std::chrono::seconds(4));
+	lock.lock();
+
+	window.setMonitor(Zuazo::Outputs::Window::NO_MONITOR);
+
+	lock.unlock();
+	//Some strange behaviour, that's why this line is duplicate
+	std::cin.get();
+	std::cin.get();
 	lock.lock();
 }

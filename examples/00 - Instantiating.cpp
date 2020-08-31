@@ -48,9 +48,9 @@ int main() {
 	Zuazo::Outputs::Window window(
 		instance, 						//Instance
 		"Output Window",				//Layout name
+		videoMode,						//Video mode limits
 		Zuazo::Math::Vec2i(1280, 720),	//Window size (in screen coordinates)
-		Zuazo::Outputs::Window::NO_MONITOR, //No monitor
-		videoMode						//Video mode limits
+		Zuazo::Outputs::Window::NO_MONITOR //No monitor
 	);
 
 	//Open the window (now becomes visible)

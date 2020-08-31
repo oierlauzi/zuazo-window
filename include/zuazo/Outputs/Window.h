@@ -47,10 +47,10 @@ public:
 	};
 
 	Window(	Instance& instance, 
-			std::string name, 
+			std::string name,
+			VideoMode videoMode = VideoMode::ANY,
 			Math::Vec2i size = Math::Vec2i(640, 480),
 			const Monitor& mon = NO_MONITOR,
-			VideoMode videoMode = VideoMode::ANY,
 			Callbacks cbks = {} );
 	Window(const Window& other) = delete;
 	Window(Window&& other);
@@ -105,6 +105,7 @@ public:
 
 	static void					init();
 
+	static Monitor				getPrimaryMonitor();
 	static std::vector<Monitor>	getMonitors();
 
 	static void					pollEvents(std::unique_lock<Instance>& lock);
@@ -131,9 +132,10 @@ public:
 	Monitor&					operator=(Monitor&& other);
 
 	std::string_view			getName() const;
+	Math::Vec2d					getPhysicalSize() const;
 	Math::Vec2i					getSize() const;
 	Math::Vec2i					getPosition() const;
-	Math::Vec2d					getPhysicalSize() const;
+	Rate						getFrameRate() const;
 
 private:
 	struct Impl;

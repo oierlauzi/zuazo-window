@@ -31,7 +31,8 @@ public:
 
 	~GLFW();
 
-	std::vector<Monitor>				getMonitors();
+	Monitor								getPrimaryMonitor() const;
+	std::vector<Monitor>				getMonitors() const;
 	void								setMonitorCallback(MonitorCallback cbk);
 	const MonitorCallback&				getMonitorCallback() const;
 
@@ -88,8 +89,10 @@ public:
 	operator bool() const;
 
 	std::string_view                    getName() const;
-	Math::Vec2i                         getPosition() const;
 	Math::Vec2d                         getPhysicalSize() const;
+	Math::Vec2i                         getSize() const;
+	Math::Vec2i                         getPosition() const;
+	int									getFrameRate() const;
 	Mode                                getMode() const;
 	std::vector<Mode>                   getModes() const;
 
@@ -154,7 +157,6 @@ public:
 	const StateCallback&		getStateCallback() const;
 
 	void						setMonitor(const Monitor& mon);
-	void						setMonitor(const Monitor& mon, const Monitor::Mode& mode);
 	Monitor						getMonitor() const;
 
 	void						setPosition(const Math::Vec2i& pos);

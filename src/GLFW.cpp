@@ -259,6 +259,10 @@ struct GLFW::MainThread {
 	
 
 	//Monitor stuff
+	Monitor getPrimaryMonitor(){
+		return execute(getPrimaryMonitorImpl);
+	}
+
 	std::vector<Monitor> getMonitors(){
 		return execute(getMonitorsImpl);
 	}
@@ -271,12 +275,20 @@ struct GLFW::MainThread {
 		return execute(getNameImpl, mon);
 	}
 
+	Math::Vec2d getPhysicalSize(MonitorHandle mon){
+		return execute(getPhysicalSizeImpl, mon);
+	}
+
+	Math::Vec2i getSize(MonitorHandle mon){
+		return execute(getMonitorSizeImpl, mon);
+	}
+
 	Math::Vec2i getPosition(MonitorHandle mon){
 		return execute(getMonitorPositionImpl, mon);
 	}
 
-	Math::Vec2d getPhysicalSize(MonitorHandle mon){
-		return execute(getPhysicalSizeImpl, mon);
+	int getFrameRate(MonitorHandle mon){
+		return execute(getFrameRateImpl, mon);
 	}
 
 	Monitor::Mode getMode(MonitorHandle mon){
@@ -328,10 +340,9 @@ struct GLFW::MainThread {
 
 	void setMonitor(WindowHandle win, 
 					Window::Geometry* windowedGeom,
-					const Monitor& newMon, 
-					const Monitor::Mode& mode )
+					const Monitor& newMon )
 	{
-		execute(setMonitorImpl, win, windowedGeom, newMon, mode);
+		execute(setMonitorImpl, win, windowedGeom, newMon);
 	}
 
 	Monitor getMonitor(WindowHandle win){
@@ -531,6 +542,10 @@ private:
 
 
 	//Monitor implementations
+	static Monitor getPrimaryMonitorImpl(){
+		return Monitor(glfwGetPrimaryMonitor());
+	}
+
 	static std::vector<Monitor> getMonitorsImpl(){
 		int cnt;
 		MonitorHandle* monitors = glfwGetMonitors(&cnt);
@@ -558,6 +573,19 @@ private:
 		return std::string_view(glfwGetMonitorName(mon));
 	}
 
+	static Math::Vec2d getPhysicalSizeImpl(MonitorHandle mon){
+		assert(isValidImpl(mon));
+		Math::Vec2i result;
+		glfwGetMonitorPhysicalSize(mon, &result.x, &result.y);
+		return Math::Vec2d(result) * 1e-3; //In metres
+	}
+
+	static Math::Vec2i getMonitorSizeImpl(MonitorHandle mon){
+		assert(isValidImpl(mon));
+		const auto* mode = glfwGetVideoMode(mon);
+		return Math::Vec2i(mode->width, mode->height);
+	}
+
 	static Math::Vec2i getMonitorPositionImpl(MonitorHandle mon){
 		assert(isValidImpl(mon));
 		Math::Vec2i result;
@@ -565,11 +593,10 @@ private:
 		return result;
 	}
 
-	static Math::Vec2d getPhysicalSizeImpl(MonitorHandle mon){
+	static int getFrameRateImpl(MonitorHandle mon){
 		assert(isValidImpl(mon));
-		Math::Vec2i result;
-		glfwGetMonitorPhysicalSize(mon, &result.x, &result.y);
-		return Math::Vec2d(result) * 1e-3; //In metres
+		const auto* mode = glfwGetVideoMode(mon);
+		return mode->refreshRate;
 	}
 
 	static Monitor::Mode getModeImpl(MonitorHandle mon){
@@ -663,8 +690,7 @@ private:
 				setMonitorImpl(	
 					win, 
 					windowedGeom, 
-					GLFW::NO_MONITOR, 
-					Monitor::Mode()
+					GLFW::NO_MONITOR
 				);
 				break;
 
@@ -690,8 +716,7 @@ private:
 				setMonitorImpl(
 					win, 
 					windowedGeom, 
-					Monitor(glfwGetPrimaryMonitor()),
-					getModeImpl(glfwGetPrimaryMonitor())
+					getPrimaryMonitorImpl()
 				);
 				break;
 
@@ -731,8 +756,7 @@ private:
 
 	static void setMonitorImpl(	WindowHandle win, 
 								Window::Geometry* windowedGeom,
-								const Monitor& newMon, 
-								const Monitor::Mode& mode )
+								const Monitor& newMon )
 	{
 		const auto oldMonHandle = glfwGetWindowMonitor(win);
 		const auto newMonHandle = newMon.m_monitor;
@@ -750,15 +774,16 @@ private:
 				}
 
 				const Math::Vec2i pos = getMonitorPositionImpl(newMonHandle);
+				const Math::Vec2i size = getMonitorSizeImpl(newMonHandle);
 
 				glfwSetWindowMonitor(
 					win, 
 					newMonHandle, 
 					pos.x,
 					pos.y,
-					mode.size.x,
-					mode.size.y,
-					mode.frameRate
+					size.x,
+					size.y,
+					GLFW_DONT_CARE
 				);
 			} else {
 				//It is going to be windowed
@@ -769,7 +794,7 @@ private:
 					windowedGeom->pos.y,
 					windowedGeom->size.x,
 					windowedGeom->size.y,
-					0
+					GLFW_DONT_CARE
 				);
 			}
 		}
@@ -872,7 +897,11 @@ GLFW::GLFW()
 
 GLFW::~GLFW() = default;
 
-std::vector<GLFW::Monitor> GLFW::getMonitors(){
+GLFW::Monitor GLFW::getPrimaryMonitor() const {
+	return m_mainThread->getPrimaryMonitor(); 
+}
+
+std::vector<GLFW::Monitor> GLFW::getMonitors() const {
 	return m_mainThread->getMonitors();
 }
 
@@ -946,12 +975,20 @@ std::string_view GLFW::Monitor::getName() const {
 	return getGLFW().m_mainThread->getName(m_monitor);
 }
 
+Math::Vec2d GLFW::Monitor::getPhysicalSize() const {
+	return getGLFW().m_mainThread->getPhysicalSize(m_monitor);
+}
+
+Math::Vec2i GLFW::Monitor::getSize() const {
+	return getGLFW().m_mainThread->getSize(m_monitor);
+}
+
 Math::Vec2i GLFW::Monitor::getPosition() const {
 	return getGLFW().m_mainThread->getPosition(m_monitor);
 }
 
-Math::Vec2d GLFW::Monitor::getPhysicalSize() const {
-	return getGLFW().m_mainThread->getPhysicalSize(m_monitor);
+int GLFW::Monitor::getFrameRate() const {
+	return getGLFW().m_mainThread->getFrameRate(m_monitor);
 }
 
 GLFW::Monitor::Mode GLFW::Monitor::getMode() const {
@@ -1073,15 +1110,7 @@ const GLFW::Window::StateCallback& GLFW::Window::getStateCallback() const{
 
 
 void GLFW::Window::setMonitor(const Monitor& mon){
-	if(mon){
-		setMonitor(mon, mon.getMode());
-	}else {
-		setMonitor(NO_MONITOR, Monitor::Mode());
-	}
-}
-
-void GLFW::Window::setMonitor(const Monitor& mon, const Monitor::Mode& mode){
-	getGLFW().m_mainThread->setMonitor(m_window, &m_windowedState, mon, mode);
+	getGLFW().m_mainThread->setMonitor(m_window, &m_windowedState, mon);
 }
 
 GLFW::Monitor GLFW::Window::getMonitor() const{
