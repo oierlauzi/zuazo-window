@@ -86,8 +86,7 @@ int main() {
 
 	//And the same signal delayed to the second
 	Zuazo::Signal::Delay<Zuazo::Video> delayLine("Delay", Zuazo::Duration(std::chrono::seconds(1)));
-	delayLine.getInput() << Zuazo::Signal::getOutput<Zuazo::Video>(testSrc);
-	Zuazo::Signal::getInput<Zuazo::Video>(window2) << delayLine.getOutput();
+	Zuazo::Signal::getInput<Zuazo::Video>(window2) << (delayLine << Zuazo::Signal::getOutput<Zuazo::Video>(testSrc));
 
 	const auto updateCallback = std::make_shared<Zuazo::Instance::ScheduledCallback>(
 		[&instance, &delayLine] () {
