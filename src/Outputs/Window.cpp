@@ -1087,7 +1087,7 @@ struct Window::Impl {
 		}
 	};
 
-	Instance&									instance;
+	std::reference_wrapper<Window>				owner;
 
 	std::string									windowName;
 	Math::Vec2i 								size;
@@ -1107,12 +1107,12 @@ struct Window::Impl {
 	static constexpr auto PRIORITY = Instance::OUTPUT_PRIORITY;
 	static constexpr auto NO_POSTION = Math::Vec2i(std::numeric_limits<int32_t>::min());
 
-	Impl(	Instance& instance,
+	Impl(	Window& owner,
 			Math::Vec2i size,
 			const Monitor& mon,
 			Callbacks callbacks)
-		: instance(instance)
-		, windowName(instance.getApplicationInfo().name)
+		: owner(owner)
+		, windowName(owner.getInstance().getApplicationInfo().name)
 		, size(size)
 		, position(NO_POSTION)
 		, state(State::NORMAL)
@@ -1127,13 +1127,17 @@ struct Window::Impl {
 	~Impl() = default;
 
 
+	void moved(ZuazoBase& base) {
+		owner = static_cast<Window&>(base);
+	}
 
-	void open(ZuazoBase& base) 
-	{
+	void open(ZuazoBase& base) {
 		assert(!opened);
+		assert(&owner.get() == &static_cast<Window&>(base));
+		ZUAZO_IGNORE_PARAM(base);
 
-		Window& win = static_cast<Window&>(base);
-		const auto& vulkan = instance.getVulkan();
+		Window& win = owner.get();
+		const auto& vulkan = win.getInstance().getVulkan();
 
 		//Try to open it
 		opened = std::make_unique<Impl::Open>(
@@ -1165,8 +1169,10 @@ struct Window::Impl {
 
 	void close(ZuazoBase& base) {
 		assert(opened);
+		assert(&owner.get() == &static_cast<Window&>(base));
+		ZUAZO_IGNORE_PARAM(base);
 
-		Window& win = static_cast<Window&>(base);
+		Window& win = owner.get();
 
 		win.disablePeriodicUpdate();
 		opened.reset();
@@ -1178,7 +1184,7 @@ struct Window::Impl {
 		if(opened) {
 			Window& win = static_cast<Window&>(base);
 
-			auto [format, colorSpace, colorTransfer] = convertParameters(instance.getVulkan(), videoMode);
+			auto [format, colorSpace, colorTransfer] = convertParameters(win.getInstance().getVulkan(), videoMode);
 			opened->reconfigure(format, colorSpace, std::move(colorTransfer));
 
 			win.disablePeriodicUpdate();
@@ -1235,7 +1241,8 @@ struct Window::Impl {
 			);
 
 			//Query for full compatibility
-			const auto& vulkan = instance.getVulkan();
+			Window& win = owner.get();
+			const auto& vulkan = win.getInstance().getVulkan();
 			const auto surfaceFormats = vulkan.getPhysicalDevice().getSurfaceFormatsKHR(*(opened->surface), vulkan.getDispatcher());
 
 			for(const auto& surfaceFormat : surfaceFormats) {
@@ -1509,7 +1516,8 @@ private:
 
 	void resolutionCallback(Resolution res) {
 		assert(opened);
-		std::lock_guard<Instance> lock(instance);
+		Window& win = owner.get();
+		std::lock_guard<Instance> lock(win.getInstance());
 		opened->resizeFramebuffer(res);
 		//TODO update compatibility and remove the above line
 
@@ -1517,53 +1525,65 @@ private:
 	}
 
 	void sizeCallback(Math::Vec2i s) {
-		std::lock_guard<Instance> lock(instance);
+		assert(opened);
+		Window& win = owner.get();
+		std::lock_guard<Instance> lock(win.getInstance());
 
 		size = s;
 		if(callbacks.sizeCbk) {
-			callbacks.sizeCbk(size);
+			callbacks.sizeCbk(win, size);
 		}
 	}
 
 	void positionCallback(Math::Vec2i pos) {
-		std::lock_guard<Instance> lock(instance);
+		assert(opened);
+		Window& win = owner.get();
+		std::lock_guard<Instance> lock(win.getInstance());
 
 		position = pos;
 		if(callbacks.positionCbk) {
-			callbacks.positionCbk(position);
+			callbacks.positionCbk(win, position);
 		}
 	}
 
 	void stateCallback(GLFW::Window::State st) {
-		std::lock_guard<Instance> lock(instance);
+		assert(opened);
+		Window& win = owner.get();
+		std::lock_guard<Instance> lock(win.getInstance());
 
 		state = fromGLFW(st);
 		if(callbacks.stateCbk) {
-			callbacks.stateCbk(state);
+			callbacks.stateCbk(win, state);
 		}
 	}
 
 	void scaleCallback(Math::Vec2f sc) {
-		std::lock_guard<Instance> lock(instance);
+		assert(opened);
+		Window& win = owner.get();
+		std::lock_guard<Instance> lock(win.getInstance());
 
 		if(callbacks.scaleCbk) {
-			callbacks.scaleCbk(sc);
+			callbacks.scaleCbk(win, sc);
 		}
 	}
 
 	void focusCallback(bool foc) {
-		std::lock_guard<Instance> lock(instance);
+		assert(opened);
+		Window& win = owner.get();
+		std::lock_guard<Instance> lock(win.getInstance());
 
 		if(callbacks.focusCbk) {
-			callbacks.focusCbk(foc);
+			callbacks.focusCbk(win, foc);
 		}
 	}
 
 	void shouldCloseCallback() {
-		std::lock_guard<Instance> lock(instance);
+		assert(opened);
+		Window& win = owner.get();
+		std::lock_guard<Instance> lock(win.getInstance());
 
 		if(callbacks.shouldCloseCbk) {
-			callbacks.shouldCloseCbk();
+			callbacks.shouldCloseCbk(win);
 		}
 	}
 
@@ -1645,9 +1665,10 @@ Window::Window(	Instance& instance,
 	: ZuazoBase(instance, std::move(name))
 	, VideoBase(std::move(videoMode))
 	, VideoScalerBase()
-	, m_impl({}, instance, size, mon, std::move(cbks))
+	, m_impl({}, *this, size, mon, std::move(cbks))
 {
 	Layout::registerPad(m_impl->videoIn);
+	setMoveCallback(std::bind(&Impl::moved, std::ref(*m_impl), std::placeholders::_1));
 	setOpenCallback(std::bind(&Impl::open, std::ref(*m_impl), std::placeholders::_1));
 	setCloseCallback(std::bind(&Impl::close, std::ref(*m_impl), std::placeholders::_1));
 	setUpdateCallback(std::bind(&Impl::update, std::ref(*m_impl)));

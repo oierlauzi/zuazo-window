@@ -30,12 +30,12 @@ public:
 		MAXIMIZED
 	};
 
-	using SizeCallback = std::function<void(Math::Vec2i)>;
-	using PositionCallback = std::function<void(Math::Vec2i)>;
-	using StateCallback = std::function<void(State)>;
-	using ScaleCallback = std::function<void(Math::Vec2f)>;
-	using FocusCallback = std::function<void(bool)>;
-	using ShouldCloseCallback = std::function<void()>;
+	using SizeCallback = std::function<void(Window&, Math::Vec2i)>;
+	using PositionCallback = std::function<void(Window&, Math::Vec2i)>;
+	using StateCallback = std::function<void(Window&, State)>;
+	using ScaleCallback = std::function<void(Window&, Math::Vec2f)>;
+	using FocusCallback = std::function<void(Window&, bool)>;
+	using ShouldCloseCallback = std::function<void(Window&)>;
 
 	struct Callbacks {
 		SizeCallback				sizeCbk;

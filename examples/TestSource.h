@@ -14,10 +14,11 @@ public:
 		: ZuazoBase(
 			instance,
 			std::move(name),
+			{ videoOut },
+			ZuazoBase::MoveCallback(),
 			std::bind(&TestSource::openImpl, std::ref(*this), std::placeholders::_1),
 			std::bind(&TestSource::closeImpl, std::ref(*this), std::placeholders::_1),
-			std::bind(&TestSource::update, std::ref(*this)),
-			{ videoOut }
+			std::bind(&TestSource::update, std::ref(*this))
 		)
 		, videoMode(std::move(videoMode))
 		, uploader(instance.getVulkan(), videoMode.getFrameDescriptor())
