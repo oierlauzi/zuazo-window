@@ -13,7 +13,161 @@
 #define GLFW_INCLUDE_NONE //Don't include GL
 #include <GLFW/glfw3.h>
 
+
 namespace Zuazo {
+
+/*
+ * Enumeration checks
+ */
+
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NONE) == GLFW_KEY_UNKNOWN, "NONE keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::SPACE) == GLFW_KEY_SPACE, "SPACE keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::APOSTROPHE) == GLFW_KEY_APOSTROPHE, "APOSTROPHE keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::COMMA) == GLFW_KEY_COMMA, "COMMA keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::MINUS) == GLFW_KEY_MINUS, "MINUS keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::PERIOD) == GLFW_KEY_PERIOD, "PERIOD keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::SLASH) == GLFW_KEY_SLASH, "SLASH keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB0) == GLFW_KEY_0, "NB0 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB1) == GLFW_KEY_1, "NB1 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB2) == GLFW_KEY_2, "NB2 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB3) == GLFW_KEY_3, "NB3 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB4) == GLFW_KEY_4, "NB4 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB5) == GLFW_KEY_5, "NB5 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB6) == GLFW_KEY_6, "NB6 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB7) == GLFW_KEY_7, "NB7 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB8) == GLFW_KEY_8, "NB8 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB9) == GLFW_KEY_9, "NB9 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::SEMICOLON) == GLFW_KEY_SEMICOLON, "SEMICOLON keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::EQUAL) == GLFW_KEY_EQUAL, "EQUAL keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::A) == GLFW_KEY_A, "A keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::B) == GLFW_KEY_B, "B keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::C) == GLFW_KEY_C, "C keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::D) == GLFW_KEY_D, "D keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::E) == GLFW_KEY_E, "E keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F) == GLFW_KEY_F, "F keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::G) == GLFW_KEY_G, "G keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::H) == GLFW_KEY_H, "H keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::I) == GLFW_KEY_I, "I keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::J) == GLFW_KEY_J, "J keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::K) == GLFW_KEY_K, "K keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::L) == GLFW_KEY_L, "L keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::M) == GLFW_KEY_M, "M keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::N) == GLFW_KEY_N, "N keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::O) == GLFW_KEY_O, "O keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::P) == GLFW_KEY_P, "P keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::Q) == GLFW_KEY_Q, "Q keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::R) == GLFW_KEY_R, "R keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::S) == GLFW_KEY_S, "S keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::T) == GLFW_KEY_T, "T keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::U) == GLFW_KEY_U, "U keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::V) == GLFW_KEY_V, "V keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::W) == GLFW_KEY_W, "W keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::X) == GLFW_KEY_X, "X keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::Y) == GLFW_KEY_Y, "Y keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::Z) == GLFW_KEY_Z, "Z keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT_BRACKET) == GLFW_KEY_LEFT_BRACKET, "LEFT_BRACKET keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::BACKSLASH) == GLFW_KEY_BACKSLASH, "BACKSLASH keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT_BRACKET) == GLFW_KEY_RIGHT_BRACKET, "RIGHT_BRACKET keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::GRAVE_ACCENT) == GLFW_KEY_GRAVE_ACCENT, "GRAVE_ACCENT keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::WORLD_1) == GLFW_KEY_WORLD_1, "WORLD_1 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::WORLD_2) == GLFW_KEY_WORLD_2, "WORLD_2 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::ESCAPE) == GLFW_KEY_ESCAPE, "ESCAPE keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::ENTER) == GLFW_KEY_ENTER, "ENTER keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::TAB) == GLFW_KEY_TAB, "TAB keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::BACKSPACE) == GLFW_KEY_BACKSPACE, "BACKSPACE keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::INSERT) == GLFW_KEY_INSERT, "INSERT keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::DELETE) == GLFW_KEY_DELETE, "DELETE keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT) == GLFW_KEY_RIGHT, "RIGHT keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT) == GLFW_KEY_LEFT, "LEFT keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::DOWN) == GLFW_KEY_DOWN, "DOWN keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::UP) == GLFW_KEY_UP, "UP keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::PAGE_UP) == GLFW_KEY_PAGE_UP, "PAGE_UP keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::PAGE_DOWN) == GLFW_KEY_PAGE_DOWN, "PAGE_DOWN keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::HOME) == GLFW_KEY_HOME, "HOME keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::END) == GLFW_KEY_END, "END keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::CAPS_LOCK) == GLFW_KEY_CAPS_LOCK, "CAPS_LOCK keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::SCROLL_LOCK) == GLFW_KEY_SCROLL_LOCK, "SCROLL_LOCK keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NUM_LOCK) == GLFW_KEY_NUM_LOCK, "NUM_LOCK keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::PRINT_SCREEN) == GLFW_KEY_PRINT_SCREEN, "PRINT_SCREEN keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::PAUSE) == GLFW_KEY_PAUSE, "PAUSE keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F1) == GLFW_KEY_F1, "F1 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F2) == GLFW_KEY_F2, "F2 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F3) == GLFW_KEY_F3, "F3 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F4) == GLFW_KEY_F4, "F4 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F5) == GLFW_KEY_F5, "F5 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F6) == GLFW_KEY_F6, "F6 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F7) == GLFW_KEY_F7, "F7 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F8) == GLFW_KEY_F8, "F8 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F9) == GLFW_KEY_F9, "F9 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F10) == GLFW_KEY_F10, "F10 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F11) == GLFW_KEY_F11, "F11 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F12) == GLFW_KEY_F12, "F12 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F13) == GLFW_KEY_F13, "F13 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F14) == GLFW_KEY_F14, "F14 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F15) == GLFW_KEY_F15, "F15 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F16) == GLFW_KEY_F16, "F16 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F17) == GLFW_KEY_F17, "F17 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F18) == GLFW_KEY_F18, "F18 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F19) == GLFW_KEY_F19, "F19 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F20) == GLFW_KEY_F20, "F20 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F21) == GLFW_KEY_F21, "F21 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F22) == GLFW_KEY_F22, "F22 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F23) == GLFW_KEY_F23, "F23 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F24) == GLFW_KEY_F24, "F24 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F25) == GLFW_KEY_F25, "F25 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_0) == GLFW_KEY_KP_0, "KP_0 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_1) == GLFW_KEY_KP_1, "KP_1 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_2) == GLFW_KEY_KP_2, "KP_2 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_3) == GLFW_KEY_KP_3, "KP_3 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_4) == GLFW_KEY_KP_4, "KP_4 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_5) == GLFW_KEY_KP_5, "KP_5 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_6) == GLFW_KEY_KP_6, "KP_6 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_7) == GLFW_KEY_KP_7, "KP_7 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_8) == GLFW_KEY_KP_8, "KP_8 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_9) == GLFW_KEY_KP_9, "KP_9 keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_DECIMAL) == GLFW_KEY_KP_DECIMAL, "KP_DECIMAL keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_DIVIDE) == GLFW_KEY_KP_DIVIDE, "KP_DIVIDE keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_MULTIPLY) == GLFW_KEY_KP_MULTIPLY, "KP_MULTIPLY keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_SUBTRACT) == GLFW_KEY_KP_SUBTRACT, "KP_SUBTRACT keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_ADD) == GLFW_KEY_KP_ADD, "KP_ADD keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_ENTER) == GLFW_KEY_KP_ENTER, "KP_ENTER keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_EQUAL) == GLFW_KEY_KP_EQUAL, "KP_EQUAL keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT_SHIFT) == GLFW_KEY_LEFT_SHIFT, "LEFT_SHIFT keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT_CONTROL) == GLFW_KEY_LEFT_CONTROL, "LEFT_CONTROL keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT_ALT) == GLFW_KEY_LEFT_ALT, "LEFT_ALT keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT_SUPER) == GLFW_KEY_LEFT_SUPER, "LEFT_SUPER keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT_SHIFT) == GLFW_KEY_RIGHT_SHIFT, "RIGHT_SHIFT keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT_CONTROL) == GLFW_KEY_RIGHT_CONTROL, "RIGHT_CONTROL keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT_ALT) == GLFW_KEY_RIGHT_ALT, "RIGHT_ALT keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT_SUPER) == GLFW_KEY_RIGHT_SUPER, "RIGHT_SUPER keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardKey::MENU) == GLFW_KEY_MENU, "MENU keycode does not match");
+
+
+static_assert(static_cast<int>(GLFW::Window::KeyboardEvent::RELEASE) == GLFW_RELEASE, "RELEASE event does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardEvent::PRESS) == GLFW_PRESS, "PRESS event does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardEvent::REPEAT) == GLFW_REPEAT, "REPEAT event does not match");
+
+static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::NONE) == 0, "NONE keyboard modifier bit does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::SHIFT) == GLFW_MOD_SHIFT, "SHIFT keyboard modifier bit does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::CONTROL) == GLFW_MOD_CONTROL, "CONTROL keyboard modifier bit does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::ALT) == GLFW_MOD_ALT, "ALT keyboard modifier bit does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::SUPER) == GLFW_MOD_SUPER, "SUPER keyboard modifier bit does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::CAPS_LOCK) == GLFW_MOD_CAPS_LOCK, "CAPS_LOCK keyboard modifier bit does not match");
+static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::NUM_LOCK) == GLFW_MOD_NUM_LOCK, "NUM_LOCK keyboard modifier bit does not match");
+
+
+static_assert(static_cast<int>(GLFW::Window::MouseButton::NB1) == GLFW_MOUSE_BUTTON_1, "NB1 mouse button's keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::MouseButton::NB2) == GLFW_MOUSE_BUTTON_2, "NB2 mouse button's keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::MouseButton::NB3) == GLFW_MOUSE_BUTTON_3, "NB3 mouse button's keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::MouseButton::NB4) == GLFW_MOUSE_BUTTON_4, "NB4 mouse button's keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::MouseButton::NB5) == GLFW_MOUSE_BUTTON_5, "NB5 mouse button's keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::MouseButton::NB6) == GLFW_MOUSE_BUTTON_6, "NB6 mouse button's keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::MouseButton::NB7) == GLFW_MOUSE_BUTTON_7, "NB7 mouse button's keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::MouseButton::NB8) == GLFW_MOUSE_BUTTON_8, "NB8 mouse button's keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::MouseButton::LEFT) == GLFW_MOUSE_BUTTON_LEFT, "LEFT mouse button's keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::MouseButton::RIGHT) == GLFW_MOUSE_BUTTON_RIGHT, "RIGHT mouse button's keycode does not match");
+static_assert(static_cast<int>(GLFW::Window::MouseButton::MIDDLE) == GLFW_MOUSE_BUTTON_MIDDLE, "MIDDLE mouse button's keycode does not match");
+
 
 /*
  * GLFW::Callbacks
@@ -39,6 +193,12 @@ struct GLFW::Callbacks {
 		glfwSetWindowMaximizeCallback(win, Callbacks::maximizeCbk);
 		glfwSetFramebufferSizeCallback(win, Callbacks::framebufferCbk);
 		glfwSetWindowContentScaleCallback(win, Callbacks::scaleCbk);
+		glfwSetKeyCallback(win, Callbacks::keyboardCbk);
+		glfwSetCharCallback(win, Callbacks::characterCbk);
+		glfwSetMouseButtonCallback(win, Callbacks::mouseButtonCbk);
+		glfwSetCursorPosCallback(win, Callbacks::mousePositionCbk);
+		glfwSetScrollCallback(win, Callbacks::mouseScrollCbk);
+		glfwSetCursorEnterCallback(win, Callbacks::cursorEnterCbk);
 	}
 
 	static void setupMonitorCallback() {
@@ -205,6 +365,100 @@ struct GLFW::Callbacks {
 		}
 	}
 
+	static void keyboardCbk(WindowHandle win, int key, int scancode, int action, int mods) {
+		if(enabled) {
+			std::lock_guard<std::mutex> lock(mutex);
+
+			auto* window = static_cast<Window*>(glfwGetWindowUserPointer(win));
+			assert(window);
+			const auto& cbk = window->getKeyboardCallback();
+
+			if(cbk){
+				cbk(
+					static_cast<Window::KeyboardKey>(key), 
+					static_cast<Window::KeyboardEvent>(action), 
+					static_cast<Window::KeyboardModifiers>(mods)
+				);
+			}
+		}
+
+		ZUAZO_IGNORE_PARAM(scancode);
+	} 
+
+	static void characterCbk(WindowHandle win, uint character) {
+		if(enabled) {
+			std::lock_guard<std::mutex> lock(mutex);
+
+			auto* window = static_cast<Window*>(glfwGetWindowUserPointer(win));
+			assert(window);
+			const auto& cbk = window->getCharacterCallback();
+
+			if(cbk){
+				cbk(character);
+			}
+		}
+	} 
+
+	static void mouseButtonCbk(WindowHandle win, int button, int action, int mods) {
+		if(enabled) {
+			std::lock_guard<std::mutex> lock(mutex);
+
+			auto* window = static_cast<Window*>(glfwGetWindowUserPointer(win));
+			assert(window);
+			const auto& cbk = window->getMouseButtonCallback();
+
+			if(cbk){
+				cbk(
+					static_cast<Window::MouseButton>(button), 
+					static_cast<Window::KeyboardEvent>(action), 
+					static_cast<Window::KeyboardModifiers>(mods)
+				);
+			}
+		}
+	} 
+
+	static void mousePositionCbk(WindowHandle win, double xpos, double ypos) {
+		if(enabled) {
+			std::lock_guard<std::mutex> lock(mutex);
+
+			auto* window = static_cast<Window*>(glfwGetWindowUserPointer(win));
+			assert(window);
+			const auto& cbk = window->getMousePositionCallback();
+
+			if(cbk){
+				cbk(Math::Vec2d(xpos, ypos));
+			}
+		}
+	}
+
+	static void mouseScrollCbk(WindowHandle win, double dx, double dy) {
+		if(enabled) {
+			std::lock_guard<std::mutex> lock(mutex);
+
+			auto* window = static_cast<Window*>(glfwGetWindowUserPointer(win));
+			assert(window);
+			const auto& cbk = window->getMouseScrollCallback();
+
+			if(cbk){
+				cbk(Math::Vec2d(dx, dy));
+			}
+		}
+	} 
+
+	static void cursorEnterCbk(WindowHandle win, int entered) {
+		if(enabled) {
+			std::lock_guard<std::mutex> lock(mutex);
+
+			auto* window = static_cast<Window*>(glfwGetWindowUserPointer(win));
+			assert(window);
+			const auto& cbk = window->getCursorEnterCallback();
+
+			if(cbk){
+				cbk(entered);
+			}
+		}
+	} 
+
 };
 
 
@@ -302,7 +556,7 @@ struct GLFW::MainThread {
 
 	//Window stuff
 	GLFW::WindowHandle createWindow(const Math::Vec2i& size, 
-									std::string_view name,
+									const char* name,
 									Monitor mon,
 									Window* usrPtr )
 	{
@@ -319,7 +573,7 @@ struct GLFW::MainThread {
 		);
 	}
 
-	void setName(WindowHandle win, std::string_view name){
+	void setName(WindowHandle win, const char* name){
 		execute(setNameImpl, win, name);
 	}
 
@@ -414,6 +668,24 @@ struct GLFW::MainThread {
 
 	bool getResizeable(WindowHandle win){
 		return execute(getResizeableImpl, win);
+	}
+
+
+	Window::KeyboardEvent getKeyState(WindowHandle win, Window::KeyboardKey key) {
+		return execute(getKeyStateImpl, win, key);
+	}
+
+	Window::KeyboardEvent getMouseButtonState(WindowHandle win, Window::MouseButton but) {
+		return execute(getMouseButtonStateImpl, win, but);
+	}
+
+	Math::Vec2d getMousePosition(WindowHandle win) {
+		return execute(getMousePositionImpl, win);
+	}
+
+
+	std::string_view getKeyName(Window::KeyboardKey key, int scancode) {
+		return execute(getKeyNameImpl, key, scancode);
 	}
 
 private:
@@ -635,7 +907,7 @@ private:
 
 	//Window implementations
 	GLFW::WindowHandle createWindowImpl(Math::Vec2i size, 
-										std::string_view name,
+										const char* name,
 										Monitor mon,
 										Window* usrPtr )
 	{
@@ -645,7 +917,7 @@ private:
 		//Create the window
 		WindowHandle win = glfwCreateWindow(
 			size.x, size.y,
-			name.data(),
+			name,
 			mon.m_monitor,
 			static_cast<WindowHandle>(nullptr)
 		);
@@ -667,8 +939,8 @@ private:
 		windowCount--;
 	}
 
-	static void setNameImpl(WindowHandle win, std::string_view name){
-		glfwSetWindowTitle(win, name.data());
+	static void setNameImpl(WindowHandle win, const char* name){
+		glfwSetWindowTitle(win, name);
 	}
 
 
@@ -879,6 +1151,27 @@ private:
 		return glfwGetWindowAttrib(win, GLFW_RESIZABLE);
 	}
 
+
+
+	static Window::KeyboardEvent getKeyStateImpl(WindowHandle win, Window::KeyboardKey key) {
+		return static_cast<Window::KeyboardEvent>(glfwGetKey(win, static_cast<int>(key)));
+	}
+	
+	static Window::KeyboardEvent getMouseButtonStateImpl(WindowHandle win, Window::MouseButton but) {
+		return static_cast<Window::KeyboardEvent>(glfwGetMouseButton(win, static_cast<int>(but)));
+	}
+	
+	static Math::Vec2d getMousePositionImpl(WindowHandle win) {
+		Math::Vec2d result;
+		glfwGetCursorPos(win, &result.x, &result.y);
+		return result;
+	}
+	
+
+	static std::string_view getKeyNameImpl(Window::KeyboardKey key, int scancode) {
+		const char* keyName = glfwGetKeyName(static_cast<int>(key), scancode);
+		return keyName ? std::string_view(keyName) : std::string_view("");
+	}
 };
 
 
@@ -1011,7 +1304,7 @@ GLFW::Window::Window(WindowHandle handle)
 }
 
 GLFW::Window::Window(	Math::Vec2i size, 
-						std::string_view name,
+						const char* name,
 						Monitor mon,
 						Callbacks callbacks )
 	: m_window(getGLFW().m_mainThread->createWindow(size, name, mon, this))
@@ -1084,7 +1377,7 @@ vk::UniqueSurfaceKHR GLFW::Window::getSurface(const Graphics::Vulkan& vulkan) co
 }	
 
 
-void GLFW::Window::setName(std::string_view name){
+void GLFW::Window::setName(const char* name){
 	getGLFW().m_mainThread->setName(m_window, name);
 }
 
@@ -1259,6 +1552,79 @@ void GLFW::Window::setResizeable(bool resizeable){
 
 bool GLFW::Window::getResizeable() const{
 	return getGLFW().m_mainThread->getResizeable(m_window);
+}
+
+
+
+GLFW::Window::KeyboardEvent GLFW::Window::getKeyState(KeyboardKey key) const {
+	return getGLFW().m_mainThread->getKeyState(m_window, key);
+}
+
+void GLFW::Window::setKeyboardCallback(KeyboardCallback cbk) {
+	m_callbacks.keyboardCbk = std::move(cbk);
+}
+
+const GLFW::Window::KeyboardCallback& GLFW::Window::getKeyboardCallback() const {
+	return m_callbacks.keyboardCbk;
+}
+
+
+void GLFW::Window::setCharacterCallback(CharacterCallback cbk) {
+	m_callbacks.characterCbk = std::move(cbk);
+}
+
+const GLFW::Window::CharacterCallback& GLFW::Window::getCharacterCallback() const {
+	return m_callbacks.characterCbk;
+}
+
+
+GLFW::Window::KeyboardEvent GLFW::Window::getMouseButtonState(MouseButton but) const {
+	return getGLFW().m_mainThread->getMouseButtonState(m_window, but);
+}
+
+void GLFW::Window::setMouseButtonCallback(MouseButtonCallback cbk) {
+	m_callbacks.mouseButtonCbk = std::move(cbk);
+}
+
+const GLFW::Window::MouseButtonCallback& GLFW::Window::getMouseButtonCallback() const {
+	return m_callbacks.mouseButtonCbk;
+}
+
+
+Math::Vec2d GLFW::Window::getMousePosition() const {
+	return getGLFW().m_mainThread->getMousePosition(m_window);
+}
+
+void GLFW::Window::setMousePositionCallback(MousePositionCallback cbk) {
+	m_callbacks.mousePositionCbk = std::move(cbk);
+}
+
+const GLFW::Window::MousePositionCallback& GLFW::Window::getMousePositionCallback() const {
+	return m_callbacks.mousePositionCbk;
+}
+
+
+void GLFW::Window::setMouseScrollCallback(MouseScrollCallback cbk) {
+	m_callbacks.mouseScrollCbk = std::move(cbk);
+}
+
+const GLFW::Window::MouseScrollCallback& GLFW::Window::getMouseScrollCallback() const {
+	return m_callbacks.mouseScrollCbk;
+}
+
+
+void GLFW::Window::setCursorEnterCallback(CursorEnterCallback cbk) {
+	m_callbacks.cursorEnterCbk = std::move(cbk);
+}
+
+const GLFW::Window::CursorEnterCallback& GLFW::Window::getCursorEnterCallback() const {
+	return m_callbacks.cursorEnterCbk;
+}
+
+
+
+std::string_view GLFW::Window::getKeyName(KeyboardKey key, int scancode) {
+	return getGLFW().m_mainThread->getKeyName(key, scancode); 
 }
 
 }
