@@ -341,6 +341,12 @@ private:
 
 namespace Zuazo {
 
+ZUAZO_ENUM_ARITHMETIC_OPERATORS(Outputs::Window::KeyboardKey)
+ZUAZO_ENUM_COMP_OPERATORS(Outputs::Window::KeyboardKey)
+
+ZUAZO_ENUM_ARITHMETIC_OPERATORS(Outputs::Window::MouseButton)
+ZUAZO_ENUM_COMP_OPERATORS(Outputs::Window::MouseButton)
+
 ZUAZO_ENUM_BIT_OPERATORS(Outputs::Window::KeyboardModifiers)
 
 std::string_view toString(Outputs::Window::State state);
