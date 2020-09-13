@@ -1771,9 +1771,7 @@ private:
 		std::lock_guard<Instance> lock(win.getInstance());
 
 		size = s;
-		if(callbacks.sizeCbk) {
-			callbacks.sizeCbk(win, size);
-		}
+		Utils::invokeIf(callbacks.sizeCbk, win, size);
 	}
 
 	void positionCallback(Math::Vec2i pos) {
@@ -1782,9 +1780,7 @@ private:
 		std::lock_guard<Instance> lock(win.getInstance());
 
 		position = pos;
-		if(callbacks.positionCbk) {
-			callbacks.positionCbk(win, position);
-		}
+		Utils::invokeIf(callbacks.positionCbk, win, position);
 	}
 
 	void stateCallback(GLFW::Window::State st) {
@@ -1793,9 +1789,7 @@ private:
 		std::lock_guard<Instance> lock(win.getInstance());
 
 		state = static_cast<State>(st);
-		if(callbacks.stateCbk) {
-			callbacks.stateCbk(win, state);
-		}
+		Utils::invokeIf(callbacks.stateCbk, win, state);
 	}
 
 	void scaleCallback(Math::Vec2f sc) {
@@ -1803,9 +1797,7 @@ private:
 		Window& win = owner.get();
 		std::lock_guard<Instance> lock(win.getInstance());
 
-		if(callbacks.scaleCbk) {
-			callbacks.scaleCbk(win, sc);
-		}
+		Utils::invokeIf(callbacks.scaleCbk, win, sc);
 	}
 
 	void focusCallback(bool foc) {
@@ -1813,9 +1805,7 @@ private:
 		Window& win = owner.get();
 		std::lock_guard<Instance> lock(win.getInstance());
 
-		if(callbacks.focusCbk) {
-			callbacks.focusCbk(win, foc);
-		}
+		Utils::invokeIf(callbacks.focusCbk, win, foc);
 	}
 
 	void shouldCloseCallback() {
@@ -1823,9 +1813,7 @@ private:
 		Window& win = owner.get();
 		std::lock_guard<Instance> lock(win.getInstance());
 
-		if(callbacks.shouldCloseCbk) {
-			callbacks.shouldCloseCbk(win);
-		}
+		Utils::invokeIf(callbacks.shouldCloseCbk, win);
 	}
 
 	void keyboardCallback(GLFW::Window::KeyboardKey key, GLFW::Window::KeyboardEvent event, GLFW::Window::KeyboardModifiers mod) {
@@ -1833,14 +1821,13 @@ private:
 		Window& win = owner.get();
 		std::lock_guard<Instance> lock(win.getInstance());
 
-		if(callbacks.keyboardCbk) {
-			callbacks.keyboardCbk(
-				win, 
-				static_cast<KeyboardKey>(key), 
-				static_cast<KeyboardEvent>(event), 
-				static_cast<KeyboardModifiers>(mod)
-			);
-		}
+		Utils::invokeIf(
+			callbacks.keyboardCbk, 
+			win, 
+			static_cast<KeyboardKey>(key),
+			static_cast<KeyboardEvent>(event),
+			static_cast<KeyboardModifiers>(mod)
+		);
 	}
 
 	void characterCallback(uint character) {
@@ -1848,9 +1835,7 @@ private:
 		Window& win = owner.get();
 		std::lock_guard<Instance> lock(win.getInstance());
 
-		if(callbacks.characterCbk) {
-			callbacks.characterCbk(win, character);
-		}
+		Utils::invokeIf(callbacks.characterCbk, win, character);
 	}
 
 	void mouseButtonCallback(GLFW::Window::MouseButton button, GLFW::Window::KeyboardEvent event, GLFW::Window::KeyboardModifiers mod) {
@@ -1858,24 +1843,21 @@ private:
 		Window& win = owner.get();
 		std::lock_guard<Instance> lock(win.getInstance());
 
-		if(callbacks.mouseButtonCbk) {
-			callbacks.mouseButtonCbk(
-				win, 
-				static_cast<MouseButton>(button), 
-				static_cast<KeyboardEvent>(event), 
-				static_cast<KeyboardModifiers>(mod)
-			);
-		}
+		Utils::invokeIf(
+			callbacks.mouseButtonCbk, 
+			win, 
+			static_cast<MouseButton>(button),
+			static_cast<KeyboardEvent>(event),
+			static_cast<KeyboardModifiers>(mod)
+		);
 	}
 
-	void mousePositionCallback(Math::Vec2d position) {
+	void mousePositionCallback(Math::Vec2d pos) {
 		assert(opened);
 		Window& win = owner.get();
 		std::lock_guard<Instance> lock(win.getInstance());
 
-		if(callbacks.mousePositionCbk) {
-			callbacks.mousePositionCbk(win, position);
-		}
+		Utils::invokeIf(callbacks.mousePositionCbk, win, pos);
 	}
 
 	void mouseScrollCallback(Math::Vec2d deltaScroll) {
@@ -1883,9 +1865,7 @@ private:
 		Window& win = owner.get();
 		std::lock_guard<Instance> lock(win.getInstance());
 
-		if(callbacks.mouseScrollCbk) {
-			callbacks.mouseScrollCbk(win, deltaScroll);
-		}
+		Utils::invokeIf(callbacks.mouseScrollCbk, win, deltaScroll);
 	}
 
 	void cursorEnterCallback(bool entered) {
@@ -1893,9 +1873,7 @@ private:
 		Window& win = owner.get();
 		std::lock_guard<Instance> lock(win.getInstance());
 
-		if(callbacks.cursorEnterCbk) {
-			callbacks.cursorEnterCbk(win, entered);
-		}
+		Utils::invokeIf(callbacks.cursorEnterCbk, win, entered);
 	}
 
 
