@@ -10,12 +10,12 @@ layout(location = 0) out vec4 out_color;
 
 
 layout(set = 0, binding = 1) uniform OutputColorTransferBlock{
-	ct_data outColorTransfer;
+	ct_write_data outColorTransfer;
 };
 
 layout(set = 1, binding = ct_SAMPLER_BINDING) uniform sampler2D samplers[ct_SAMPLER_COUNT];
 layout(set = 1, binding = ct_DATA_BINDING) uniform InputColorTransferBlock {
-	ct_data inColorTransfer;
+	ct_read_data inColorTransfer;
 };
 
 void main() {

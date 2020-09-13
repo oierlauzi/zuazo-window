@@ -295,7 +295,7 @@ struct Window::Impl {
 		static constexpr uint32_t VERTEX_TEXCOORD = 1;
 
 		static constexpr size_t COLOR_TRANSFER_UNIFORM_OFFSET = 0;
-		static inline const size_t COLOR_TRANSFER_UNIFORM_SIZE = Graphics::ColorTransfer::size();
+		static inline const size_t COLOR_TRANSFER_UNIFORM_SIZE = Graphics::OutputColorTransfer::size();
 		static inline const size_t VIEWPORT_UNIFORM_OFFSET = Utils::align(COLOR_TRANSFER_UNIFORM_OFFSET + COLOR_TRANSFER_UNIFORM_SIZE, 0x100); //256 is the maximum
 		static constexpr size_t VIEWPORT_UNIFORM_SIZE = sizeof(glm::vec2);
 
@@ -320,7 +320,7 @@ struct Window::Impl {
 		vk::Extent2D								extent;
 		vk::Format 									format;
 		vk::ColorSpaceKHR 							colorSpace;
-		Graphics::ColorTransfer						colorTransfer;
+		Graphics::OutputColorTransfer				colorTransfer;
 		vk::Filter									filter;
 		Graphics::Frame::Geometry					geometry;
 
@@ -377,7 +377,7 @@ struct Window::Impl {
 			waitCompletion();
 		}
 
-		void reconfigure(vk::Format fmt, vk::ColorSpaceKHR cs, Graphics::ColorTransfer ct) {
+		void reconfigure(vk::Format fmt, vk::ColorSpaceKHR cs, Graphics::OutputColorTransfer ct) {
 			enum {
 				RECREATE_SWAPCHAIN,
 				UPDATE_COLOR_TRANSFER,
@@ -1878,7 +1878,7 @@ private:
 
 
 
-	static std::tuple<vk::Format, vk::ColorSpaceKHR, Graphics::ColorTransfer>
+	static std::tuple<vk::Format, vk::ColorSpaceKHR, Graphics::OutputColorTransfer>
 	convertParameters(	const Graphics::Vulkan& vulkan,
 						const VideoMode& videoMode )
 	{
@@ -1899,7 +1899,7 @@ private:
 		);
 
 		//Create the color transfer characteristics
-		Graphics::ColorTransfer colorTransfer(frameDescriptor);
+		Graphics::OutputColorTransfer colorTransfer(frameDescriptor);
 
 		const auto& supportedFormats = vulkan.getFormatSupport().framebuffer;
 		colorTransfer.optimize(formats, supportedFormats);
