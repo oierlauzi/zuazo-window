@@ -377,15 +377,24 @@ struct Window::Impl {
 			waitCompletion();
 		}
 
-		void reconfigure(vk::Format fmt, vk::ColorSpaceKHR cs, Graphics::OutputColorTransfer ct) {
+		void reconfigure(vk::Extent2D ext, vk::Format fmt, vk::ColorSpaceKHR cs, Graphics::OutputColorTransfer ct) {
 			enum {
 				RECREATE_SWAPCHAIN,
+				UPDATE_GEOMETRY,
+				UPDATE_VIEWPORT,
 				UPDATE_COLOR_TRANSFER,
 
 				MODIFICATION_COUNT
 			};
 
 			std::bitset<MODIFICATION_COUNT> modifications;
+
+			if(extent != ext) {
+				//Resolution has changed
+				extent = ext;
+
+				modifications.set(RECREATE_SWAPCHAIN);
+			}
 
 			if(format != fmt) {
 				//Format has changed
@@ -413,8 +422,22 @@ struct Window::Impl {
 				//Wait until rendering finishes
 				waitCompletion();
 
-				if(modifications.test(RECREATE_SWAPCHAIN)) recreateSwapchain();
-				if(modifications.test(UPDATE_COLOR_TRANSFER)) updateColorTransferUniform();
+				if(modifications.test(RECREATE_SWAPCHAIN)) {
+					recreateSwapchain();
+					
+					//Extent might have changed
+					modifications.set(UPDATE_GEOMETRY);
+				} 
+
+				if(modifications.test(UPDATE_GEOMETRY)) {
+					geometry.setTargetSize(Math::Vec2f(extent.width, extent.height));
+					modifications.set(UPDATE_VIEWPORT);
+				}
+
+				//Evaluate which uniforms need to be updated
+				if(modifications.test(UPDATE_VIEWPORT) && modifications.test(UPDATE_COLOR_TRANSFER)) updateUniforms();
+				else if(modifications.test(UPDATE_VIEWPORT)) updateViewportUniform();
+				else if(modifications.test(UPDATE_COLOR_TRANSFER)) updateColorTransferUniform();
 			}
 		}
 
@@ -526,16 +549,6 @@ struct Window::Impl {
 			//Present it
 			vulkan.present(*swapchain, index, renderFinishedSemaphores.front());
 		}
-
-		void resizeFramebuffer(Resolution res) {
-			waitCompletion();
-
-			extent = Graphics::toVulkan(res);
-			geometry.setTargetSize(res);
-			updateViewportUniform();
-			recreateSwapchain();
-		}
-
 
 	private:
 		void recreateSwapchain() {
@@ -711,7 +724,10 @@ struct Window::Impl {
 			//Perform a manual allocation, as there is only need for one. 
 			//Dont use a smart handle, as it gets freed automatically with the command pool
 			vk::CommandBuffer result;
-			vulkan.getDevice().allocateCommandBuffers(&allocInfo, &result, vulkan.getDispatcher());
+			if(vulkan.getDevice().allocateCommandBuffers(&allocInfo, &result, vulkan.getDispatcher()) != vk::Result::eSuccess) {
+				throw Exception("Error allocating commnand buffers");
+			}
+
 			return result;
 		}
 
@@ -1345,8 +1361,8 @@ struct Window::Impl {
 		if(opened) {
 			Window& win = static_cast<Window&>(base);
 
-			auto [format, colorSpace, colorTransfer] = convertParameters(win.getInstance().getVulkan(), videoMode);
-			opened->reconfigure(format, colorSpace, std::move(colorTransfer));
+			auto [extent, format, colorSpace, colorTransfer] = convertParameters(win.getInstance().getVulkan(), videoMode);
+			opened->reconfigure(extent, format, colorSpace, std::move(colorTransfer));
 
 			win.disablePeriodicUpdate();
 			win.enablePeriodicUpdate(PRIORITY, getPeriod(videoMode.getFrameRateValue()));
@@ -1391,7 +1407,7 @@ struct Window::Impl {
 			//Construct a base capability struct which will be common to all compatibilities
 			const VideoMode baseCompatibility(
 				Utils::Range<Rate>(Rate(0, 1), Rate(mon.getMode().frameRate, 1)),
-				Utils::MustBe<Resolution>(Graphics::fromVulkan(opened->extent)),
+				Utils::MustBe<Resolution>(opened->window.getResolution()),
 				Utils::MustBe<AspectRatio>(AspectRatio(1, 1)),
 				Utils::Any<ColorPrimaries>(),
 				Utils::MustBe<ColorModel>(ColorModel::RGB),
@@ -1425,11 +1441,6 @@ struct Window::Impl {
 					result.emplace_back(std::move(compatibility));
 				}
 			}
-
-			if(result.size() == 0) {
-				//There must be at least one compatibility, even if it is invalid
-				result.emplace_back();
-			}
 		}
 		
 		return result;
@@ -1454,7 +1465,7 @@ struct Window::Impl {
 			size = s;
 			if(opened) {
 				opened->window.setSize(size);
-				opened->resizeFramebuffer(opened->window.getResolution());
+				owner.get().setVideoModeCompatibility(getVideoModeCompatibility()); //This will call reconfigure if resizeing is needed
 			}
 		}
 	}
@@ -1586,7 +1597,7 @@ struct Window::Impl {
 		if(opened) {
 			opened->window.setMonitor(monitor);
 			size = opened->window.getSize();
-			opened->resizeFramebuffer(opened->window.getResolution());
+			owner.get().setVideoModeCompatibility(getVideoModeCompatibility()); //This will call reconfigure if resizeing is needed
 		}
 	}
 	
@@ -1755,14 +1766,11 @@ private:
 		};
 	}
 
-	void resolutionCallback(Resolution res) {
+	void resolutionCallback(Resolution) {
 		assert(opened);
 		Window& win = owner.get();
 		std::lock_guard<Instance> lock(win.getInstance());
-		opened->resizeFramebuffer(res);
-		//TODO update compatibility and remove the above line
-
-		hasChanged = true;
+		owner.get().setVideoModeCompatibility(getVideoModeCompatibility()); //This will call reconfigure if resizeing is needed
 	}
 
 	void sizeCallback(Math::Vec2i s) {
@@ -1878,7 +1886,7 @@ private:
 
 
 
-	static std::tuple<vk::Format, vk::ColorSpaceKHR, Graphics::OutputColorTransfer>
+	static std::tuple<vk::Extent2D, vk::Format, vk::ColorSpaceKHR, Graphics::OutputColorTransfer>
 	convertParameters(	const Graphics::Vulkan& vulkan,
 						const VideoMode& videoMode )
 	{
@@ -1888,9 +1896,9 @@ private:
 		auto formats = Graphics::Frame::getPlaneDescriptors(frameDescriptor);
 		assert(formats.size() == 1);
 
-		auto& f = formats[0];
-		std::tie(f.format, f.swizzle) = Graphics::optimizeFormat(std::make_tuple(f.format, f.swizzle));
-		assert(formats[0].swizzle == vk::ComponentMapping());
+		auto& fmt = formats[0];
+		std::tie(fmt.format, fmt.swizzle) = Graphics::optimizeFormat(std::make_tuple(fmt.format, fmt.swizzle));
+		assert(fmt.swizzle == vk::ComponentMapping());
 
 		//Obtain the color space
 		const auto colorSpace = Graphics::toVulkan(
@@ -1904,7 +1912,7 @@ private:
 		const auto& supportedFormats = vulkan.getFormatSupport().framebuffer;
 		colorTransfer.optimize(formats, supportedFormats);
 
-		return std::make_tuple(f.format, colorSpace, std::move(colorTransfer));
+		return std::make_tuple(fmt.extent, fmt.format, colorSpace, std::move(colorTransfer));
 	}
 
 	static Monitor constructMonitor(GLFW::Monitor mon) {
