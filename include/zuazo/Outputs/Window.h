@@ -295,15 +295,8 @@ public:
 
 	static const Monitor		NO_MONITOR;
 
-	static void					init();
-
 	static Monitor				getPrimaryMonitor();
 	static std::vector<Monitor>	getMonitors();
-
-	static void					pollEvents(std::unique_lock<Instance>& lock);
-	static void					waitEvents(std::unique_lock<Instance>& lock);
-	static void					waitEvents(std::unique_lock<Instance>& lock, Duration timeout);
-	static std::shared_ptr<Instance::ScheduledCallback> enableRegularEventPolling(Instance& instance);
 
 private:
 	struct Impl;

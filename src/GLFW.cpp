@@ -694,7 +694,6 @@ private:
 
 		glfwInit();
 
-		registerVulkanRequirements();
 		Callbacks::setupMonitorCallback();
 
 		while(exit == false){
@@ -739,47 +738,6 @@ private:
 		}
 	}
 
-
-	//Vulkan related
-	static std::vector<vk::ExtensionProperties> getRequiredInstanceExtensions() {
-		uint32_t glfwExtensionCount;
-		const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-		std::vector<vk::ExtensionProperties> extensions(glfwExtensionCount);
-		for(size_t i = 0; i < extensions.size(); i++){
-			strncpy(extensions[i].extensionName, glfwExtensions[i], VK_MAX_EXTENSION_NAME_SIZE);
-		}
-
-		return extensions;
-	}
-
-	static std::vector<vk::ExtensionProperties> getRequiredDeviceExtensions() {
-		return {
-			vk::ExtensionProperties(std::array<char, VK_MAX_EXTENSION_NAME_SIZE>{VK_KHR_SWAPCHAIN_EXTENSION_NAME})
-		};
-	}
-
-	static void registerVulkanRequirements() {
-		static bool registered = false;
-
-		if(!registered) {
-			Graphics::Vulkan::registerRequiredInstanceExtensions(
-				getRequiredInstanceExtensions()
-			);
-			Graphics::Vulkan::registerRequiredDeviceExtensions(
-				getRequiredDeviceExtensions()
-			);
-			Graphics::Vulkan::registerPresentationSupportCallback(
-				[] (vk::Instance inst, vk::PhysicalDevice dev, uint32_t index) -> bool {
-					return getGLFW().getPresentationSupport(inst, dev, index);	
-				}
-			);
-
-			registered = true;
-		}
-
-		assert(registered);
-	}
 
 
 	//Event implementations
@@ -1180,7 +1138,7 @@ private:
  */
 
 const GLFW::Monitor GLFW::NO_MONITOR(nullptr);
-std::unique_ptr<GLFW> GLFW::s_instance;
+GLFW* GLFW::s_singleton;
 
 
 GLFW::GLFW()
@@ -1225,10 +1183,40 @@ void GLFW::postEmptyEvent() const {
 
 
 
+void GLFW::initialize() {
+	assert(!s_singleton);
+	s_singleton = new GLFW;
+}
+
+void GLFW::terminate() {
+	assert(s_singleton);
+	delete s_singleton;
+	s_singleton = nullptr;
+}
+
+
+std::vector<vk::ExtensionProperties> GLFW::getRequiredVulkanInstanceExtensions() {
+	//Thread safe
+	uint32_t glfwExtensionCount;
+	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+	std::vector<vk::ExtensionProperties> extensions(glfwExtensionCount);
+	for(size_t i = 0; i < extensions.size(); i++){
+		std::strncpy(extensions[i].extensionName, glfwExtensions[i], VK_MAX_EXTENSION_NAME_SIZE);
+	}
+
+	return extensions;
+}
+
+std::vector<vk::ExtensionProperties> GLFW::getRequiredVulkanDeviceExtensions() {
+	return {
+		vk::ExtensionProperties(std::array<char, VK_MAX_EXTENSION_NAME_SIZE>{VK_KHR_SWAPCHAIN_EXTENSION_NAME})
+	};
+}
 
 bool GLFW::getPresentationSupport(	vk::Instance instance, 
 									vk::PhysicalDevice device, 
-									uint32_t family ) const
+									uint32_t family )
 {
 	//Thread safe
 	return glfwGetPhysicalDevicePresentationSupport(
@@ -1239,15 +1227,9 @@ bool GLFW::getPresentationSupport(	vk::Instance instance,
 }
 
 
-
-void GLFW::init() {
-	assert(!s_instance);
-	s_instance = std::unique_ptr<GLFW>(new GLFW());
-}
-
 GLFW& GLFW::getGLFW() {
-	assert(s_instance);
-	return *s_instance;
+	assert(s_singleton);
+	return *s_singleton;
 }
 
 

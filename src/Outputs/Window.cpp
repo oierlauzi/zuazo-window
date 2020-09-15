@@ -1288,7 +1288,7 @@ struct Window::Impl {
 			const Monitor& mon,
 			Callbacks callbacks)
 		: owner(owner)
-		, windowName(owner.getInstance().getApplicationInfo().name)
+		, windowName(owner.getInstance().getApplicationInfo().getName())
 		, size(size)
 		, position(NO_POSTION)
 		, state(State::NORMAL)
@@ -1680,12 +1680,6 @@ struct Window::Impl {
 
 
 
-	static void init() {
-		GLFW::init();
-	}
-
-
-
 	static Monitor getPrimaryMonitor() {
 		return Impl::constructMonitor(GLFW::getGLFW().getPrimaryMonitor());
 	}
@@ -1700,50 +1694,6 @@ struct Window::Impl {
 		}
 
 		return result;
-	}
-
-
-
-	static void pollEvents(std::unique_lock<Instance>& lock) {
-		assert(lock.owns_lock());
-		lock.unlock();
-
-		GLFW::getGLFW().pollEvents();
-
-		lock.lock();
-	}
-
-	static void waitEvents(std::unique_lock<Instance>& lock) {
-		assert(lock.owns_lock());
-		lock.unlock();
-
-		GLFW::getGLFW().waitEvents();
-		
-		lock.lock();
-	}
-
-	static void waitEvents(std::unique_lock<Instance>& lock, Duration timeout) {
-		assert(lock.owns_lock());
-		lock.unlock();
-
-		GLFW::getGLFW().waitEvents(timeout);
-		
-		lock.lock();
-	}
-
-	static std::shared_ptr<Instance::ScheduledCallback> enableRegularEventPolling(Instance& instance) {
-		auto callback = std::make_shared<Instance::ScheduledCallback>(
-			[&instance] {
-				//As it is being called from the loop, instance should be locked by this thread
-				std::unique_lock<Instance> lock(instance, std::adopt_lock);
-				Window::pollEvents(lock);
-				lock.release(); //Leave it locked
-			}
-		);
-
-		//This callback must be the last one, as it unlocks the instance, which might be dangerous
-		instance.addRegularCallback(callback, Instance::LOWEST_PRIORITY);
-		return callback;
 	}
 
 private:
@@ -2163,36 +2113,12 @@ const Window::CursorEnterCallback& Window::getCursorEnterCallback() const {
 
 
 
-void Window::init() {
-	Impl::init();
-}
-
-
-
 Window::Monitor Window::getPrimaryMonitor() {
 	return Impl::getPrimaryMonitor();
 }
 
 std::vector<Window::Monitor> Window::getMonitors() {
 	return Impl::getMonitors();
-}
-
-
-
-void Window::pollEvents(std::unique_lock<Instance>& lock) {
-	Impl::pollEvents(lock);
-}
-
-void Window::waitEvents(std::unique_lock<Instance>& lock) {
-	Impl::waitEvents(lock);
-}
-
-void Window::waitEvents(std::unique_lock<Instance>& lock, Duration timeout) {
-	Impl::waitEvents(lock, timeout);
-}
-
-std::shared_ptr<Instance::ScheduledCallback> Window::enableRegularEventPolling(Instance& instance) {
-	return Impl::enableRegularEventPolling(instance);
 }
 
 }

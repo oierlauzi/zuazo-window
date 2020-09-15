@@ -42,13 +42,17 @@ public:
 	void								waitEvents(Duration timeout) const;
 	void								postEmptyEvent() const;
 
-	bool 								getPresentationSupport(	vk::Instance instance, 
-																vk::PhysicalDevice device, 
-																uint32_t family ) const;
-
 	static const Monitor NO_MONITOR;
 
-	static void							init();
+	static void							initialize();
+	static void							terminate();
+
+	static std::vector<vk::ExtensionProperties> getRequiredVulkanInstanceExtensions();
+	static std::vector<vk::ExtensionProperties> getRequiredVulkanDeviceExtensions();
+	static bool 						getPresentationSupport(	vk::Instance instance, 
+																vk::PhysicalDevice device, 
+																uint32_t family );
+
 	static GLFW&						getGLFW();
 
 private:
@@ -65,7 +69,7 @@ private:
 
 	GLFW& 								operator=(const GLFW& other) = delete;
 
-	static std::unique_ptr<GLFW>		s_instance;
+	static GLFW*						s_singleton;
 	
 };
 
