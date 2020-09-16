@@ -10,7 +10,9 @@ namespace Zuazo::Modules {
 
 std::unique_ptr<Window> Window::s_singleton;
 
-Window::Window() {
+Window::Window() 
+	: Instance::Module(std::string(name), version)
+{
 	GLFW::initialize();
 }
 
@@ -21,7 +23,7 @@ Window::~Window() {
 
 
 
-void Window::initialize(Instance& instance) {
+void Window::initialize(Instance& instance) const {
 	const auto[ite, result] = m_pollCallbacks.emplace(
 		&instance, 
 		Utils::makeShared<Instance::ScheduledCallback>(std::bind(&Window::pollCallback, std::ref(instance)))
@@ -32,7 +34,7 @@ void Window::initialize(Instance& instance) {
 	instance.addRegularCallback(ite->second, Instance::LOWEST_PRIORITY);
 }
 
-void Window::terminate(Instance& instance) {
+void Window::terminate(Instance& instance) const {
 	const auto ite = m_pollCallbacks.find(&instance);
 	assert(ite != m_pollCallbacks.end());
 
@@ -58,7 +60,7 @@ bool Window::getPresentationSupport(vk::Instance  instance,
 
 
 
-Window& Window::get() {
+const Window& Window::get() {
 	if(!s_singleton) {
 		s_singleton = std::unique_ptr<Window>(new Window);
 	}
