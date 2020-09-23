@@ -9,7 +9,7 @@
 
 #include <zuazo/Instance.h>
 #include <zuazo/Modules/Window.h>
-#include <zuazo/Outputs/Window.h>
+#include <zuazo/Consumers/Window.h>
 
 #include <mutex>
 #include <iostream>
@@ -40,7 +40,7 @@ int main() {
 	);
 
 	//Query the available monitors
-	const auto monitors = Zuazo::Outputs::Window::getMonitors();
+	const auto monitors = Zuazo::Consumers::Window::getMonitors();
 
 	if(monitors.size() == 0) {
 		std::cerr << "No monitor is present!" << std::endl;
@@ -50,12 +50,12 @@ int main() {
 
 
 	//Construct the window object
-	Zuazo::Outputs::Window window(
+	Zuazo::Consumers::Window window(
 		instance, 						//Instance
 		"Output Window",				//Layout name
 		videoMode,						//Video mode limits
 		Zuazo::Math::Vec2i(1280, 720),	//Window size (in screen coordinates).
-		Zuazo::Outputs::Window::NO_MONITOR //The monitor
+		Zuazo::Consumers::Window::NO_MONITOR //The monitor
 		
 	);
 
@@ -71,13 +71,13 @@ int main() {
 		Zuazo::Utils::MustBe<Zuazo::ColorModel>(Zuazo::ColorModel::RGB),
 		Zuazo::Utils::MustBe<Zuazo::ColorTransferFunction>(Zuazo::ColorTransferFunction::IEC61966_2_1),
 		Zuazo::Utils::MustBe<Zuazo::ColorSubsampling>(Zuazo::ColorSubsampling::RB_444),
-		Zuazo::Utils::MustBe<Zuazo::ColorRange>(Zuazo::ColorRange::FULL),
+		Zuazo::Utils::MustBe<Zuazo::ColorRange>(Zuazo::ColorRange::FULL_RGB),
 		Zuazo::Utils::MustBe<Zuazo::ColorFormat>(Zuazo::ColorFormat::B8G8R8A8)	
 	);
 
 	TestSource testSrc(instance, "", testVideoMode);
 	testSrc.open();
-	Zuazo::Signal::getInput<Zuazo::Video>(window) << Zuazo::Signal::getOutput<Zuazo::Video>(testSrc);
+	window << Zuazo::Signal::getOutput<Zuazo::Video>(testSrc);
 
 
 	//Display the available monitors for selection
@@ -102,7 +102,7 @@ int main() {
 	std::this_thread::sleep_for(std::chrono::seconds(4));
 	lock.lock();
 
-	window.setMonitor(Zuazo::Outputs::Window::NO_MONITOR);
+	window.setMonitor(Zuazo::Consumers::Window::NO_MONITOR);
 
 	lock.unlock();
 	//Some strange behaviour, that's why this line is duplicate

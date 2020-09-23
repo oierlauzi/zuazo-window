@@ -9,7 +9,7 @@
 
 #include <zuazo/Instance.h>
 #include <zuazo/Modules/Window.h>
-#include <zuazo/Outputs/Window.h>
+#include <zuazo/Consumers/Window.h>
 #include <zuazo/Signal/Delay.h>
 
 #include <mutex>
@@ -39,20 +39,20 @@ int main() {
 	);
 
 	//Construct the window objects
-	Zuazo::Outputs::Window window1(
+	Zuazo::Consumers::Window window1(
 		instance, 						//Instance
 		"Output Window 1",				//Layout name
 		videoMode,						//Video mode limits
 		Zuazo::Math::Vec2i(1280, 720),	//Window size (in screen coordinates)
-		Zuazo::Outputs::Window::NO_MONITOR //No monitor
+		Zuazo::Consumers::Window::NO_MONITOR //No monitor
 	);
 
-	Zuazo::Outputs::Window window2(
+	Zuazo::Consumers::Window window2(
 		instance, 						//Instance
 		"Output Window 2",				//Layout name
 		videoMode,						//Video mode limits
 		Zuazo::Math::Vec2i(1280, 720),	//Window size (in screen coordinates)
-		Zuazo::Outputs::Window::NO_MONITOR //No monitor
+		Zuazo::Consumers::Window::NO_MONITOR //No monitor
 	);
 
 
@@ -69,17 +69,17 @@ int main() {
 		Zuazo::Utils::MustBe<Zuazo::ColorModel>(Zuazo::ColorModel::RGB),
 		Zuazo::Utils::MustBe<Zuazo::ColorTransferFunction>(Zuazo::ColorTransferFunction::IEC61966_2_1),
 		Zuazo::Utils::MustBe<Zuazo::ColorSubsampling>(Zuazo::ColorSubsampling::RB_444),
-		Zuazo::Utils::MustBe<Zuazo::ColorRange>(Zuazo::ColorRange::FULL),
+		Zuazo::Utils::MustBe<Zuazo::ColorRange>(Zuazo::ColorRange::FULL_RGB),
 		Zuazo::Utils::MustBe<Zuazo::ColorFormat>(Zuazo::ColorFormat::B8G8R8A8)	
 	);
 
 	TestSource testSrc(instance, "", testVideoMode);
 	testSrc.open();
-	Zuazo::Signal::getInput<Zuazo::Video>(window1) << Zuazo::Signal::getOutput<Zuazo::Video>(testSrc);
+	window1 << Zuazo::Signal::getOutput<Zuazo::Video>(testSrc);
 
 	//And the same signal delayed to the second
 	Zuazo::Signal::Delay<Zuazo::Video> delayLine("Delay", Zuazo::Duration(std::chrono::seconds(1)));
-	Zuazo::Signal::getInput<Zuazo::Video>(window2) << (delayLine << Zuazo::Signal::getOutput<Zuazo::Video>(testSrc));
+	window2 << delayLine << Zuazo::Signal::getOutput<Zuazo::Video>(testSrc);
 
 	const auto updateCallback = std::make_shared<Zuazo::Instance::ScheduledCallback>(
 		[&instance, &delayLine] () {

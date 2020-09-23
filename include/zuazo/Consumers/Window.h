@@ -7,19 +7,22 @@
 #include <zuazo/ScalingFilter.h>
 #include <zuazo/Math/Vector.h>
 #include <zuazo/Utils/Pimpl.h>
-#include <zuazo/Signal/Input.h>
+#include <zuazo/Signal/ConsumerLayout.h>
 
 #include <tuple>
 #include <vector>
 #include <mutex>
 
-namespace Zuazo::Outputs{
+namespace Zuazo::Consumers{
 
 class Window final
-	: public ZuazoBase
+	: public Utils::Pimpl<struct WindowImpl>
+	, public ZuazoBase
 	, public VideoBase
 	, public VideoScalerBase
+	, public Signal::ConsumerLayout<Video>
 {
+	friend WindowImpl;
 public:
 	class Monitor;
 
@@ -298,15 +301,11 @@ public:
 	static Monitor				getPrimaryMonitor();
 	static std::vector<Monitor>	getMonitors();
 
-private:
-	struct Impl;
-	Utils::Pimpl<Impl>			m_impl;
-
 };
 
 
 class Window::Monitor {
-	friend Window::Impl;
+	friend WindowImpl;
 public:
 	Monitor();
 	Monitor(const Monitor& other) = delete;
@@ -334,27 +333,27 @@ private:
 
 namespace Zuazo {
 
-ZUAZO_ENUM_ARITHMETIC_OPERATORS(Outputs::Window::KeyboardKey)
-ZUAZO_ENUM_COMP_OPERATORS(Outputs::Window::KeyboardKey)
+ZUAZO_ENUM_ARITHMETIC_OPERATORS(Consumers::Window::KeyboardKey)
+ZUAZO_ENUM_COMP_OPERATORS(Consumers::Window::KeyboardKey)
 
-ZUAZO_ENUM_ARITHMETIC_OPERATORS(Outputs::Window::MouseButton)
-ZUAZO_ENUM_COMP_OPERATORS(Outputs::Window::MouseButton)
+ZUAZO_ENUM_ARITHMETIC_OPERATORS(Consumers::Window::MouseButton)
+ZUAZO_ENUM_COMP_OPERATORS(Consumers::Window::MouseButton)
 
-ZUAZO_ENUM_BIT_OPERATORS(Outputs::Window::KeyboardModifiers)
+ZUAZO_ENUM_BIT_OPERATORS(Consumers::Window::KeyboardModifiers)
 
-std::string_view toString(Outputs::Window::State state);
-std::ostream& operator<<(std::ostream& os, Outputs::Window::State state);
+std::string_view toString(Consumers::Window::State state);
+std::ostream& operator<<(std::ostream& os, Consumers::Window::State state);
 
-std::string_view toString(Outputs::Window::KeyboardKey key);
-std::ostream& operator<<(std::ostream& os, Outputs::Window::KeyboardKey key);
+std::string_view toString(Consumers::Window::KeyboardKey key);
+std::ostream& operator<<(std::ostream& os, Consumers::Window::KeyboardKey key);
 
-std::string_view toString(Outputs::Window::KeyboardEvent event);
-std::ostream& operator<<(std::ostream& os, Outputs::Window::KeyboardEvent event);
+std::string_view toString(Consumers::Window::KeyboardEvent event);
+std::ostream& operator<<(std::ostream& os, Consumers::Window::KeyboardEvent event);
 
-std::string toString(Outputs::Window::KeyboardModifiers mod);
-std::ostream& operator<<(std::ostream& os, Outputs::Window::KeyboardModifiers mod);
+std::string toString(Consumers::Window::KeyboardModifiers mod);
+std::ostream& operator<<(std::ostream& os, Consumers::Window::KeyboardModifiers mod);
 
-std::string_view toString(Outputs::Window::MouseButton but);
-std::ostream& operator<<(std::ostream& os, Outputs::Window::MouseButton but);
+std::string_view toString(Consumers::Window::MouseButton but);
+std::ostream& operator<<(std::ostream& os, Consumers::Window::MouseButton but);
 
 }

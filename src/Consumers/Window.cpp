@@ -1,4 +1,4 @@
-#include <zuazo/Outputs/Window.h>
+#include <zuazo/Consumers/Window.h>
 
 #include "../GLFW.h"
 
@@ -6,6 +6,8 @@
 #include <zuazo/Graphics/VulkanConversions.h>
 #include <zuazo/Graphics/ColorTransfer.h>
 #include <zuazo/Graphics/StagedBuffer.h>
+#include <zuazo/Utils/Area.h>
+#include <zuazo/Utils/CPU.h>
 #include <zuazo/Utils/StaticId.h>
 #include <zuazo/Utils/Functions.h>
 #include <zuazo/Math/Functions.h>
@@ -17,168 +19,10 @@
 #include <bitset>
 #include <mutex>
 #include <sstream>
+#include <unordered_map>
 
 
-namespace Zuazo::Outputs {
-
-/*
- * Enumeration checks
- */
-
-static_assert(static_cast<int>(GLFW::Window::State::NORMAL) == static_cast<int>(Window::State::NORMAL), "NORMAL state value does not match");
-static_assert(static_cast<int>(GLFW::Window::State::HIDDEN) == static_cast<int>(Window::State::HIDDEN), "HIDDEN state value does not match");
-static_assert(static_cast<int>(GLFW::Window::State::FULLSCREEN) == static_cast<int>(Window::State::FULLSCREEN), "FULLSCREEN state value does not match");
-static_assert(static_cast<int>(GLFW::Window::State::ICONIFIED) == static_cast<int>(Window::State::ICONIFIED), "ICONIFIED state value does not match");
-static_assert(static_cast<int>(GLFW::Window::State::MAXIMIZED) == static_cast<int>(Window::State::MAXIMIZED), "MAXIMIZED state value does not match");
-
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NONE) == static_cast<int>(Window::KeyboardKey::NONE), "NONE keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::SPACE) == static_cast<int>(Window::KeyboardKey::SPACE), "SPACE keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::APOSTROPHE) == static_cast<int>(Window::KeyboardKey::APOSTROPHE), "APOSTROPHE keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::COMMA) == static_cast<int>(Window::KeyboardKey::COMMA), "COMMA keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::MINUS) == static_cast<int>(Window::KeyboardKey::MINUS), "MINUS keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::PERIOD) == static_cast<int>(Window::KeyboardKey::PERIOD), "PERIOD keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::SLASH) == static_cast<int>(Window::KeyboardKey::SLASH), "SLASH keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB0) == static_cast<int>(Window::KeyboardKey::NB0), "NB0 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB1) == static_cast<int>(Window::KeyboardKey::NB1), "NB1 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB2) == static_cast<int>(Window::KeyboardKey::NB2), "NB2 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB3) == static_cast<int>(Window::KeyboardKey::NB3), "NB3 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB4) == static_cast<int>(Window::KeyboardKey::NB4), "NB4 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB5) == static_cast<int>(Window::KeyboardKey::NB5), "NB5 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB6) == static_cast<int>(Window::KeyboardKey::NB6), "NB6 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB7) == static_cast<int>(Window::KeyboardKey::NB7), "NB7 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB8) == static_cast<int>(Window::KeyboardKey::NB8), "NB8 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NB9) == static_cast<int>(Window::KeyboardKey::NB9), "NB9 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::SEMICOLON) == static_cast<int>(Window::KeyboardKey::SEMICOLON), "SEMICOLON keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::EQUAL) == static_cast<int>(Window::KeyboardKey::EQUAL), "EQUAL keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::A) == static_cast<int>(Window::KeyboardKey::A), "A keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::B) == static_cast<int>(Window::KeyboardKey::B), "B keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::C) == static_cast<int>(Window::KeyboardKey::C), "C keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::D) == static_cast<int>(Window::KeyboardKey::D), "D keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::E) == static_cast<int>(Window::KeyboardKey::E), "E keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F) == static_cast<int>(Window::KeyboardKey::F), "F keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::G) == static_cast<int>(Window::KeyboardKey::G), "G keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::H) == static_cast<int>(Window::KeyboardKey::H), "H keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::I) == static_cast<int>(Window::KeyboardKey::I), "I keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::J) == static_cast<int>(Window::KeyboardKey::J), "J keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::K) == static_cast<int>(Window::KeyboardKey::K), "K keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::L) == static_cast<int>(Window::KeyboardKey::L), "L keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::M) == static_cast<int>(Window::KeyboardKey::M), "M keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::N) == static_cast<int>(Window::KeyboardKey::N), "N keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::O) == static_cast<int>(Window::KeyboardKey::O), "O keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::P) == static_cast<int>(Window::KeyboardKey::P), "P keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::Q) == static_cast<int>(Window::KeyboardKey::Q), "Q keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::R) == static_cast<int>(Window::KeyboardKey::R), "R keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::S) == static_cast<int>(Window::KeyboardKey::S), "S keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::T) == static_cast<int>(Window::KeyboardKey::T), "T keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::U) == static_cast<int>(Window::KeyboardKey::U), "U keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::V) == static_cast<int>(Window::KeyboardKey::V), "V keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::W) == static_cast<int>(Window::KeyboardKey::W), "W keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::X) == static_cast<int>(Window::KeyboardKey::X), "X keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::Y) == static_cast<int>(Window::KeyboardKey::Y), "Y keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::Z) == static_cast<int>(Window::KeyboardKey::Z), "Z keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT_BRACKET) == static_cast<int>(Window::KeyboardKey::LEFT_BRACKET), "LEFT_BRACKET keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::BACKSLASH) == static_cast<int>(Window::KeyboardKey::BACKSLASH), "BACKSLASH keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT_BRACKET) == static_cast<int>(Window::KeyboardKey::RIGHT_BRACKET), "RIGHT_BRACKET keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::GRAVE_ACCENT) == static_cast<int>(Window::KeyboardKey::GRAVE_ACCENT), "GRAVE_ACCENT keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::WORLD_1) == static_cast<int>(Window::KeyboardKey::WORLD_1), "WORLD_1 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::WORLD_2) == static_cast<int>(Window::KeyboardKey::WORLD_2), "WORLD_2 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::ESCAPE) == static_cast<int>(Window::KeyboardKey::ESCAPE), "ESCAPE keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::ENTER) == static_cast<int>(Window::KeyboardKey::ENTER), "ENTER keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::TAB) == static_cast<int>(Window::KeyboardKey::TAB), "TAB keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::BACKSPACE) == static_cast<int>(Window::KeyboardKey::BACKSPACE), "BACKSPACE keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::INSERT) == static_cast<int>(Window::KeyboardKey::INSERT), "INSERT keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::DELETE) == static_cast<int>(Window::KeyboardKey::DELETE), "DELETE keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT) == static_cast<int>(Window::KeyboardKey::RIGHT), "RIGHT keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT) == static_cast<int>(Window::KeyboardKey::LEFT), "LEFT keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::DOWN) == static_cast<int>(Window::KeyboardKey::DOWN), "DOWN keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::UP) == static_cast<int>(Window::KeyboardKey::UP), "UP keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::PAGE_UP) == static_cast<int>(Window::KeyboardKey::PAGE_UP), "PAGE_UP keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::PAGE_DOWN) == static_cast<int>(Window::KeyboardKey::PAGE_DOWN), "PAGE_DOWN keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::HOME) == static_cast<int>(Window::KeyboardKey::HOME), "HOME keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::END) == static_cast<int>(Window::KeyboardKey::END), "END keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::CAPS_LOCK) == static_cast<int>(Window::KeyboardKey::CAPS_LOCK), "CAPS_LOCK keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::SCROLL_LOCK) == static_cast<int>(Window::KeyboardKey::SCROLL_LOCK), "SCROLL_LOCK keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::NUM_LOCK) == static_cast<int>(Window::KeyboardKey::NUM_LOCK), "NUM_LOCK keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::PRINT_SCREEN) == static_cast<int>(Window::KeyboardKey::PRINT_SCREEN), "PRINT_SCREEN keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::PAUSE) == static_cast<int>(Window::KeyboardKey::PAUSE), "PAUSE keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F1) == static_cast<int>(Window::KeyboardKey::F1), "F1 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F2) == static_cast<int>(Window::KeyboardKey::F2), "F2 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F3) == static_cast<int>(Window::KeyboardKey::F3), "F3 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F4) == static_cast<int>(Window::KeyboardKey::F4), "F4 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F5) == static_cast<int>(Window::KeyboardKey::F5), "F5 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F6) == static_cast<int>(Window::KeyboardKey::F6), "F6 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F7) == static_cast<int>(Window::KeyboardKey::F7), "F7 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F8) == static_cast<int>(Window::KeyboardKey::F8), "F8 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F9) == static_cast<int>(Window::KeyboardKey::F9), "F9 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F10) == static_cast<int>(Window::KeyboardKey::F10), "F10 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F11) == static_cast<int>(Window::KeyboardKey::F11), "F11 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F12) == static_cast<int>(Window::KeyboardKey::F12), "F12 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F13) == static_cast<int>(Window::KeyboardKey::F13), "F13 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F14) == static_cast<int>(Window::KeyboardKey::F14), "F14 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F15) == static_cast<int>(Window::KeyboardKey::F15), "F15 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F16) == static_cast<int>(Window::KeyboardKey::F16), "F16 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F17) == static_cast<int>(Window::KeyboardKey::F17), "F17 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F18) == static_cast<int>(Window::KeyboardKey::F18), "F18 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F19) == static_cast<int>(Window::KeyboardKey::F19), "F19 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F20) == static_cast<int>(Window::KeyboardKey::F20), "F20 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F21) == static_cast<int>(Window::KeyboardKey::F21), "F21 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F22) == static_cast<int>(Window::KeyboardKey::F22), "F22 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F23) == static_cast<int>(Window::KeyboardKey::F23), "F23 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F24) == static_cast<int>(Window::KeyboardKey::F24), "F24 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::F25) == static_cast<int>(Window::KeyboardKey::F25), "F25 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_0) == static_cast<int>(Window::KeyboardKey::KP_0), "KP_0 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_1) == static_cast<int>(Window::KeyboardKey::KP_1), "KP_1 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_2) == static_cast<int>(Window::KeyboardKey::KP_2), "KP_2 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_3) == static_cast<int>(Window::KeyboardKey::KP_3), "KP_3 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_4) == static_cast<int>(Window::KeyboardKey::KP_4), "KP_4 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_5) == static_cast<int>(Window::KeyboardKey::KP_5), "KP_5 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_6) == static_cast<int>(Window::KeyboardKey::KP_6), "KP_6 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_7) == static_cast<int>(Window::KeyboardKey::KP_7), "KP_7 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_8) == static_cast<int>(Window::KeyboardKey::KP_8), "KP_8 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_9) == static_cast<int>(Window::KeyboardKey::KP_9), "KP_9 keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_DECIMAL) == static_cast<int>(Window::KeyboardKey::KP_DECIMAL), "KP_DECIMAL keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_DIVIDE) == static_cast<int>(Window::KeyboardKey::KP_DIVIDE), "KP_DIVIDE keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_MULTIPLY) == static_cast<int>(Window::KeyboardKey::KP_MULTIPLY), "KP_MULTIPLY keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_SUBTRACT) == static_cast<int>(Window::KeyboardKey::KP_SUBTRACT), "KP_SUBTRACT keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_ADD) == static_cast<int>(Window::KeyboardKey::KP_ADD), "KP_ADD keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_ENTER) == static_cast<int>(Window::KeyboardKey::KP_ENTER), "KP_ENTER keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::KP_EQUAL) == static_cast<int>(Window::KeyboardKey::KP_EQUAL), "KP_EQUAL keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT_SHIFT) == static_cast<int>(Window::KeyboardKey::LEFT_SHIFT), "LEFT_SHIFT keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT_CONTROL) == static_cast<int>(Window::KeyboardKey::LEFT_CONTROL), "LEFT_CONTROL keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT_ALT) == static_cast<int>(Window::KeyboardKey::LEFT_ALT), "LEFT_ALT keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::LEFT_SUPER) == static_cast<int>(Window::KeyboardKey::LEFT_SUPER), "LEFT_SUPER keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT_SHIFT) == static_cast<int>(Window::KeyboardKey::RIGHT_SHIFT), "RIGHT_SHIFT keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT_CONTROL) == static_cast<int>(Window::KeyboardKey::RIGHT_CONTROL), "RIGHT_CONTROL keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT_ALT) == static_cast<int>(Window::KeyboardKey::RIGHT_ALT), "RIGHT_ALT keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::RIGHT_SUPER) == static_cast<int>(Window::KeyboardKey::RIGHT_SUPER), "RIGHT_SUPER keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardKey::MENU) == static_cast<int>(Window::KeyboardKey::MENU), "MENU keycode does not match");
-
-
-static_assert(static_cast<int>(GLFW::Window::KeyboardEvent::RELEASE) == static_cast<int>(Window::KeyboardEvent::RELEASE), "RELEASE event does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardEvent::PRESS) == static_cast<int>(Window::KeyboardEvent::PRESS), "PRESS event does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardEvent::REPEAT) == static_cast<int>(Window::KeyboardEvent::REPEAT), "REPEAT event does not match");
-
-static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::NONE) == static_cast<int>(Window::KeyboardModifiers::NONE), "NONE keyboard modifier bit does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::SHIFT) == static_cast<int>(Window::KeyboardModifiers::SHIFT), "SHIFT keyboard modifier bit does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::CONTROL) == static_cast<int>(Window::KeyboardModifiers::CONTROL), "CONTROL keyboard modifier bit does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::ALT) == static_cast<int>(Window::KeyboardModifiers::ALT), "ALT keyboard modifier bit does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::SUPER) == static_cast<int>(Window::KeyboardModifiers::SUPER), "SUPER keyboard modifier bit does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::CAPS_LOCK) == static_cast<int>(Window::KeyboardModifiers::CAPS_LOCK), "CAPS_LOCK keyboard modifier bit does not match");
-static_assert(static_cast<int>(GLFW::Window::KeyboardModifiers::NUM_LOCK) == static_cast<int>(Window::KeyboardModifiers::NUM_LOCK), "NUM_LOCK keyboard modifier bit does not match");
-
-
-static_assert(static_cast<int>(GLFW::Window::MouseButton::NB1) == static_cast<int>(Window::MouseButton::NB1), "NB1 mouse button's keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::MouseButton::NB2) == static_cast<int>(Window::MouseButton::NB2), "NB2 mouse button's keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::MouseButton::NB3) == static_cast<int>(Window::MouseButton::NB3), "NB3 mouse button's keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::MouseButton::NB4) == static_cast<int>(Window::MouseButton::NB4), "NB4 mouse button's keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::MouseButton::NB5) == static_cast<int>(Window::MouseButton::NB5), "NB5 mouse button's keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::MouseButton::NB6) == static_cast<int>(Window::MouseButton::NB6), "NB6 mouse button's keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::MouseButton::NB7) == static_cast<int>(Window::MouseButton::NB7), "NB7 mouse button's keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::MouseButton::NB8) == static_cast<int>(Window::MouseButton::NB8), "NB8 mouse button's keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::MouseButton::LEFT) == static_cast<int>(Window::MouseButton::LEFT), "LEFT mouse button's keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::MouseButton::RIGHT) == static_cast<int>(Window::MouseButton::RIGHT), "RIGHT mouse button's keycode does not match");
-static_assert(static_cast<int>(GLFW::Window::MouseButton::MIDDLE) == static_cast<int>(Window::MouseButton::MIDDLE), "MIDDLE mouse button's keycode does not match");
-
+namespace Zuazo::Consumers {
 
 /*
  * Window::Monitor::Impl
@@ -265,9 +109,9 @@ Rate Window::Monitor::getFrameRate() const {
 
 
 /*
- * Window::Impl
+ * WindowImpl
  */
-struct Window::Impl {
+struct WindowImpl {
 	struct Open {
 		struct Vertex {
 			Math::Vec2f position;
@@ -289,18 +133,12 @@ struct Window::Impl {
 			WINDOW_DESCRIPTOR_COUNT
 		};
 
+		using UniformBufferLayout = std::array<Utils::Area, WINDOW_DESCRIPTOR_COUNT>;
+
 
 		static constexpr uint32_t VERTEX_BUFFER_BINDING = 0;
 		static constexpr uint32_t VERTEX_POSITION = 0;
 		static constexpr uint32_t VERTEX_TEXCOORD = 1;
-
-		static constexpr size_t COLOR_TRANSFER_UNIFORM_OFFSET = 0;
-		static inline const size_t COLOR_TRANSFER_UNIFORM_SIZE = Graphics::OutputColorTransfer::size();
-		static inline const size_t VIEWPORT_UNIFORM_OFFSET = Utils::align(COLOR_TRANSFER_UNIFORM_OFFSET + COLOR_TRANSFER_UNIFORM_SIZE, 0x100); //256 is the maximum
-		static constexpr size_t VIEWPORT_UNIFORM_SIZE = sizeof(glm::vec2);
-
-		static inline const size_t UNIFORM_BUFFER_SIZE = VIEWPORT_UNIFORM_OFFSET + VIEWPORT_UNIFORM_SIZE;
-
 
 
 		const Graphics::Vulkan&						vulkan;
@@ -310,6 +148,7 @@ struct Window::Impl {
 		vk::UniqueCommandPool						commandPool;
 		vk::CommandBuffer							commandBuffer;
 		Graphics::StagedBuffer						vertexBuffer;
+		UniformBufferLayout							uniformBufferLayout;
 		Graphics::StagedBuffer						uniformBuffer;
 		vk::UniqueDescriptorPool					descriptorPool;
 		vk::DescriptorSet							descriptorSet;
@@ -326,10 +165,10 @@ struct Window::Impl {
 
 		vk::UniqueSwapchainKHR						swapchain;
 		std::vector<vk::UniqueImageView>			swapchainImageViews;
-		vk::UniqueRenderPass						renderPass;
+		vk::RenderPass								renderPass;
 		std::vector<vk::UniqueFramebuffer>			framebuffers;
 		vk::PipelineLayout							pipelineLayout;
-		vk::UniquePipeline							pipeline;	
+		vk::UniquePipeline							pipeline;
 
 
 		Open(	const Graphics::Vulkan& vulkan,
@@ -345,7 +184,8 @@ struct Window::Impl {
 			, commandPool(createCommandPool(vulkan))
 			, commandBuffer(createCommandBuffer(vulkan, *commandPool))
 			, vertexBuffer(createVertexBuffer(vulkan))
-			, uniformBuffer(createUniformBuffer(vulkan))
+			, uniformBufferLayout(createUniformBufferLayout(vulkan))
+			, uniformBuffer(createUniformBuffer(vulkan, uniformBufferLayout))
 			, descriptorPool(createDescriptorPool(vulkan))
 			, descriptorSet(createDescriptorSet(vulkan, *descriptorPool))
 			, imageAvailableSemaphore(vulkan.createSemaphore())
@@ -380,6 +220,9 @@ struct Window::Impl {
 		void reconfigure(vk::Extent2D ext, vk::Format fmt, vk::ColorSpaceKHR cs, Graphics::OutputColorTransfer ct) {
 			enum {
 				RECREATE_SWAPCHAIN,
+				RECREATE_RENDERPASS,
+				RECREATE_FRAMEBUFFERS,
+				RECREATE_PIPELINE,
 				UPDATE_GEOMETRY,
 				UPDATE_VIEWPORT,
 				UPDATE_COLOR_TRANSFER,
@@ -394,6 +237,8 @@ struct Window::Impl {
 				extent = ext;
 
 				modifications.set(RECREATE_SWAPCHAIN);
+				modifications.set(RECREATE_PIPELINE);
+				modifications.set(UPDATE_GEOMETRY);
 			}
 
 			if(format != fmt) {
@@ -401,6 +246,7 @@ struct Window::Impl {
 				format = fmt;
 
 				modifications.set(RECREATE_SWAPCHAIN);
+				modifications.set(RECREATE_RENDERPASS);
 			}
 
 			if(colorSpace != cs) {
@@ -423,10 +269,32 @@ struct Window::Impl {
 				waitCompletion();
 
 				if(modifications.test(RECREATE_SWAPCHAIN)) {
-					recreateSwapchain();
+					const auto oldExtent = extent;
+					swapchain = createSwapchain(vulkan, *surface, extent, format, colorSpace, *swapchain);
+					swapchainImageViews = createImageViews(vulkan, *swapchain, format);
 					
+					modifications.set(RECREATE_FRAMEBUFFERS);
+
 					//Extent might have changed
-					modifications.set(UPDATE_GEOMETRY);
+					if(oldExtent != extent) {
+						modifications.set(RECREATE_PIPELINE);
+						modifications.set(UPDATE_GEOMETRY);
+					}
+				} 
+
+				if(modifications.test(RECREATE_RENDERPASS)) {
+					renderPass = createRenderPass(vulkan, format);
+					
+					modifications.set(RECREATE_FRAMEBUFFERS);
+					modifications.set(RECREATE_PIPELINE);
+				} 
+
+				if(modifications.test(RECREATE_FRAMEBUFFERS)) {
+					framebuffers = createFramebuffers(vulkan, renderPass, swapchainImageViews, extent);
+				} 
+
+				if(modifications.test(RECREATE_PIPELINE)) {
+					pipeline = createPipeline(vulkan, renderPass, pipelineLayout, extent);
 				} 
 
 				if(modifications.test(UPDATE_GEOMETRY)) {
@@ -449,7 +317,10 @@ struct Window::Impl {
 		void setScalingFilter(ScalingFilter filt) {
 			waitCompletion();
 			filter = Graphics::toVulkan(filt);
-			recreatePipelineLayout();
+
+			//Recreate the pipeline layout
+			pipelineLayout = createPipelineLayout(vulkan, filter);
+			pipeline = createPipeline(vulkan, renderPass, pipelineLayout, extent);
 		}
 
 		void draw(const std::shared_ptr<const Graphics::Frame>& frame) {
@@ -484,10 +355,10 @@ struct Window::Impl {
 
 			//Begin a render pass
 			const std::array clearValue = {
-				vk::ClearValue(std::array{ 0.0f, 0.0f, 0.0f, 0.0f })
+				vk::ClearValue(vk::ClearColorValue(std::array{ 0.0f, 0.0f, 0.0f, 0.0f }))
 			};
 			const vk::RenderPassBeginInfo rendBegin(
-				*renderPass,														//Renderpass
+				renderPass,															//Renderpass
 				frameBuffer,														//Target framebuffer
 				vk::Rect2D({0, 0}, extent),											//Extent
 				clearValue.size(), clearValue.data()								//Attachment clear values
@@ -552,28 +423,28 @@ struct Window::Impl {
 
 	private:
 		void recreateSwapchain() {
+			const auto oldExtent = extent;
 			swapchain = createSwapchain(vulkan, *surface, extent, format, colorSpace, *swapchain);
 			swapchainImageViews = createImageViews(vulkan, *swapchain, format);
-			renderPass = createRenderPass(vulkan, format);
-			framebuffers = createFramebuffers(vulkan, *renderPass, swapchainImageViews, extent);
-			pipeline = createPipeline(vulkan, *renderPass, pipelineLayout, extent);
-		}
+			framebuffers = createFramebuffers(vulkan, renderPass, swapchainImageViews, extent);
 
-		void recreatePipelineLayout() {
-			pipelineLayout = createPipelineLayout(vulkan, filter);
-			pipeline = createPipeline(vulkan, *renderPass, pipelineLayout, extent);
+			if(extent != oldExtent) {
+				pipeline = createPipeline(vulkan, renderPass, pipelineLayout, extent);
+				geometry.setTargetSize(Math::Vec2f(extent.width, extent.height));
+				updateViewportUniform();
+			}
 		}
 
 		void updateViewportUniform() {
 			uniformBuffer.waitCompletion(vulkan);
 
-			auto& size = *(reinterpret_cast<Math::Vec2f*>(uniformBuffer.data() + VIEWPORT_UNIFORM_OFFSET));
+			auto& size = *(reinterpret_cast<Math::Vec2f*>(uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].begin(uniformBuffer.data())));
 			size = geometry.getTargetSize();
 
 			uniformBuffer.flushData(
 				vulkan,
-				VIEWPORT_UNIFORM_OFFSET,
-				VIEWPORT_UNIFORM_SIZE,
+				uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].offset(),
+				uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].size(),
 				vulkan.getGraphicsQueueIndex(),
 				vk::AccessFlagBits::eUniformRead,
 				vk::PipelineStageFlagBits::eVertexShader
@@ -584,15 +455,15 @@ struct Window::Impl {
 			uniformBuffer.waitCompletion(vulkan);
 			
 			std::memcpy(
-				uniformBuffer.data() + COLOR_TRANSFER_UNIFORM_OFFSET,
+				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].begin(uniformBuffer.data()),
 				colorTransfer.data(),
-				COLOR_TRANSFER_UNIFORM_SIZE
+				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].size()
 			);
 
 			uniformBuffer.flushData(
 				vulkan,
-				COLOR_TRANSFER_UNIFORM_OFFSET,
-				COLOR_TRANSFER_UNIFORM_SIZE,
+				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].offset(),
+				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].size(),
 				vulkan.getGraphicsQueueIndex(),
 				vk::AccessFlagBits::eUniformRead,
 				vk::PipelineStageFlagBits::eFragmentShader
@@ -602,13 +473,13 @@ struct Window::Impl {
 		void updateUniforms() {
 			uniformBuffer.waitCompletion(vulkan);		
 			
-			auto& size = *(reinterpret_cast<Math::Vec2f*>(uniformBuffer.data() + VIEWPORT_UNIFORM_OFFSET));
+			auto& size = *(reinterpret_cast<Math::Vec2f*>(uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].begin(uniformBuffer.data())));
 			size = geometry.getTargetSize();
 
 			std::memcpy(
-				uniformBuffer.data() + COLOR_TRANSFER_UNIFORM_OFFSET,
+				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].begin(uniformBuffer.data()),
 				colorTransfer.data(),
-				COLOR_TRANSFER_UNIFORM_SIZE
+				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].size()
 			);
 
 			uniformBuffer.flushData(
@@ -657,16 +528,16 @@ struct Window::Impl {
 		void writeDescriptorSets() {
 			const std::array viewportBuffers = {
 				vk::DescriptorBufferInfo(
-					uniformBuffer.getBuffer(),								//Buffer
-					VIEWPORT_UNIFORM_OFFSET,								//Offset
-					VIEWPORT_UNIFORM_SIZE									//Size
+					uniformBuffer.getBuffer(),										//Buffer
+					uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].offset(),		//Offset
+					uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].size()			//Size
 				)
 			};
 			const std::array colorTransferBuffers = {
 				vk::DescriptorBufferInfo(
-					uniformBuffer.getBuffer(),								//Buffer
-					COLOR_TRANSFER_UNIFORM_OFFSET,							//Offset
-					COLOR_TRANSFER_UNIFORM_SIZE								//Size
+					uniformBuffer.getBuffer(),										//Buffer
+					uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].offset(),	//Offset
+					uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].size()	//Size
 				)
 			};
 
@@ -740,11 +611,24 @@ struct Window::Impl {
 			);
 		}
 
-		static Graphics::StagedBuffer createUniformBuffer(const Graphics::Vulkan& vulkan) {
+		static UniformBufferLayout createUniformBufferLayout(const Graphics::Vulkan& vulkan) {
+			const auto& limits = vulkan.getPhysicalDeviceProperties().limits;
+
+			const auto viewportOff = 0;
+			const auto colorTansferOff = Utils::align(viewportOff + sizeof(glm::vec2), limits.minUniformBufferOffsetAlignment);
+
+			return UniformBufferLayout {
+				Utils::Area(viewportOff, 		sizeof(glm::vec2)),		//Viewport
+				Utils::Area(colorTansferOff,	Graphics::OutputColorTransfer::size() ) //Color Transfer
+			};
+		}
+
+
+		static Graphics::StagedBuffer createUniformBuffer(const Graphics::Vulkan& vulkan, const UniformBufferLayout& layout) {
 			return Graphics::StagedBuffer(
 				vulkan,
 				vk::BufferUsageFlagBits::eUniformBuffer,
-				UNIFORM_BUFFER_SIZE
+				layout.back().end()
 			);
 		}
 
@@ -910,62 +794,72 @@ struct Window::Impl {
 			return result;
 		}
 
-		static vk::UniqueRenderPass createRenderPass(	const Graphics::Vulkan& vulkan, 
-														vk::Format format )
+		static vk::RenderPass createRenderPass(	const Graphics::Vulkan& vulkan, 
+												vk::Format format )
 		{
-			const std::array attachments = {
-				vk::AttachmentDescription(
-					{},												//Flags
-					format,											//Attachemnt format
-					vk::SampleCountFlagBits::e1,					//Sample count
-					vk::AttachmentLoadOp::eClear,					//Color attachment load operation
-					vk::AttachmentStoreOp::eStore,					//Color attachemnt store operation
-					vk::AttachmentLoadOp::eDontCare,				//Stencil attachment load operation
-					vk::AttachmentStoreOp::eDontCare,				//Stencil attachment store operation
-					vk::ImageLayout::eUndefined,					//Initial layout
-					vk::ImageLayout::ePresentSrcKHR					//Final layout
-				)
-			};
+			static std::unordered_map<vk::Format, Utils::StaticId> ids;
+			const auto id = ids[format].get();
 
-			const std::array attachmentReferences = {
-				vk::AttachmentReference(
-					0, 												//Attachments index
-					vk::ImageLayout::eColorAttachmentOptimal 		//Attachemnt layout
-				)
-			};
+			auto result = vulkan.createRenderPass(id);
+			if(!result) {
+				//Render pass was not created
+				const std::array attachments = {
+					vk::AttachmentDescription(
+						{},												//Flags
+						format,											//Attachemnt format
+						vk::SampleCountFlagBits::e1,					//Sample count
+						vk::AttachmentLoadOp::eClear,					//Color attachment load operation
+						vk::AttachmentStoreOp::eStore,					//Color attachemnt store operation
+						vk::AttachmentLoadOp::eDontCare,				//Stencil attachment load operation
+						vk::AttachmentStoreOp::eDontCare,				//Stencil attachment store operation
+						vk::ImageLayout::eUndefined,					//Initial layout
+						vk::ImageLayout::ePresentSrcKHR					//Final layout
+					)
+				};
 
-			const std::array subpasses = {
-				vk::SubpassDescription(
-					{},												//Flags
-					vk::PipelineBindPoint::eGraphics,				//Pipeline bind point
-					0, nullptr,										//Input attachments
-					attachmentReferences.size(), attachmentReferences.data(), //Color attachments
-					nullptr,										//Resolve attachemnts
-					nullptr,										//Depth / Stencil attachemnts
-					0, nullptr										//Preserve attachments
-				)
-			};
+				constexpr std::array attachmentReferences = {
+					vk::AttachmentReference(
+						0, 												//Attachments index
+						vk::ImageLayout::eColorAttachmentOptimal 		//Attachemnt layout
+					)
+				};
 
-			const std::array subpassDependencies = {
-				vk::SubpassDependency(
-					VK_SUBPASS_EXTERNAL,							//Source subpass
-					0,												//Destination subpass
-					vk::PipelineStageFlagBits::eColorAttachmentOutput,//Source stage
-					vk::PipelineStageFlagBits::eColorAttachmentOutput,//Destination stage
-					{},												//Source access mask
-					vk::AccessFlagBits::eColorAttachmentRead | 		//Destintation access mask
-						vk::AccessFlagBits::eColorAttachmentWrite
-				)
-			};
+				const std::array subpasses = {
+					vk::SubpassDescription(
+						{},												//Flags
+						vk::PipelineBindPoint::eGraphics,				//Pipeline bind point
+						0, nullptr,										//Input attachments
+						attachmentReferences.size(), attachmentReferences.data(), //Color attachments
+						nullptr,										//Resolve attachemnts
+						nullptr,										//Depth / Stencil attachemnts
+						0, nullptr										//Preserve attachments
+					)
+				};
 
-			const vk::RenderPassCreateInfo createInfo(
-				{},													//Flags
-				attachments.size(), attachments.data(),				//Attachemnts
-				subpasses.size(), subpasses.data(),					//Subpasses
-				subpassDependencies.size(), subpassDependencies.data()//Subpass dependencies
-			);
+				constexpr std::array subpassDependencies = {
+					vk::SubpassDependency(
+						VK_SUBPASS_EXTERNAL,							//Source subpass
+						0,												//Destination subpass
+						vk::PipelineStageFlagBits::eColorAttachmentOutput,//Source stage
+						vk::PipelineStageFlagBits::eColorAttachmentOutput,//Destination stage
+						{},												//Source access mask
+						vk::AccessFlagBits::eColorAttachmentRead | 		//Destintation access mask
+							vk::AccessFlagBits::eColorAttachmentWrite
+					)
+				};
 
-			return vulkan.createRenderPass(createInfo);
+				const vk::RenderPassCreateInfo createInfo(
+					{},													//Flags
+					attachments.size(), attachments.data(),				//Attachemnts
+					subpasses.size(), subpasses.data(),					//Subpasses
+					subpassDependencies.size(), subpassDependencies.data()//Subpass dependencies
+				);
+
+				result = vulkan.createRenderPass(id, createInfo);
+			}
+
+			assert(result);
+			return result;
 		}
 
 		static std::vector<vk::UniqueFramebuffer> createFramebuffers(	const Graphics::Vulkan& vulkan,
@@ -1263,44 +1157,46 @@ struct Window::Impl {
 		}
 	};
 
+	Signal::Input<Video>						videoIn;
+
 	std::reference_wrapper<Window>				owner;
 
 	std::string									windowName;
 	Math::Vec2i 								size;
 	Math::Vec2i 								position;
-	State 										state;
+	Window::State 								state;
 	float										opacity;
 	bool										resizeable;
 	bool										decorated;
 	GLFW::Monitor								monitor;
 
-	Callbacks									callbacks;
+	Window::Callbacks							callbacks;
 	
-	Signal::Input<Video>						videoIn;
 	std::unique_ptr<Open>						opened;
 	bool										hasChanged;
+
 
 	static constexpr auto PRIORITY = Instance::OUTPUT_PRIORITY;
 	static constexpr auto NO_POSTION = Math::Vec2i(std::numeric_limits<int32_t>::min());
 
-	Impl(	Window& owner,
-			Math::Vec2i size,
-			const Monitor& mon,
-			Callbacks callbacks)
+	WindowImpl(	Window& owner,
+				Instance& instance,
+				Math::Vec2i size,
+				const Window::Monitor& mon,
+				Window::Callbacks callbacks)
 		: owner(owner)
-		, windowName(owner.getInstance().getApplicationInfo().getName())
+		, windowName(instance.getApplicationInfo().getName())
 		, size(size)
 		, position(NO_POSTION)
-		, state(State::NORMAL)
+		, state(Window::State::NORMAL)
 		, opacity(1.0f)
 		, resizeable(true)
 		, decorated(true)
 		, monitor(getGLFWMonitor(mon))
 		, callbacks(std::move(callbacks))
-		, videoIn(std::string(Signal::makeInputName<Video>()))
 	{
 	}
-	~Impl() = default;
+	~WindowImpl() = default;
 
 
 	void moved(ZuazoBase& base) {
@@ -1316,7 +1212,7 @@ struct Window::Impl {
 		const auto& vulkan = win.getInstance().getVulkan();
 
 		//Try to open it
-		opened = std::make_unique<Impl::Open>(
+		opened = std::make_unique<Open>(
 			vulkan,
 			size,
 			windowName.c_str(),
@@ -1474,11 +1370,11 @@ struct Window::Impl {
 		return size;
 	}
 
-	void setSizeCallback(SizeCallback cbk) {
+	void setSizeCallback(Window::SizeCallback cbk) {
 		callbacks.sizeCbk = std::move(cbk);
 	}
 
-	const SizeCallback& getSizeCallback() const {
+	const Window::SizeCallback& getSizeCallback() const {
 		return callbacks.sizeCbk;
 	}
 
@@ -1494,31 +1390,31 @@ struct Window::Impl {
 		return position;
 	}
 
-	void setPositionCallback(PositionCallback cbk) {
+	void setPositionCallback(Window::PositionCallback cbk) {
 		callbacks.positionCbk = std::move(cbk);
 	}
 
-	const PositionCallback& getPositionCallback() const {
+	const Window::PositionCallback& getPositionCallback() const {
 		return callbacks.positionCbk;
 	}
 
 
-	void setState(State st) {
+	void setState(Window::State st) {
 		if(state != st) {
 			state = st;
 			if(opened) opened->window.setState(static_cast<GLFW::Window::State>(state));
 		}
 	}
 
-	State getState() const {
+	Window::State getState() const {
 		return state;
 	}
 
-	void setStateCallback(StateCallback cbk) {
+	void setStateCallback(Window::StateCallback cbk) {
 		callbacks.stateCbk = std::move(cbk);
 	}
 
-	const StateCallback& getStateCallback() const {
+	const Window::StateCallback& getStateCallback() const {
 		return callbacks.stateCbk;
 	}
 
@@ -1527,11 +1423,11 @@ struct Window::Impl {
 		return opened ? opened->window.getScale() : Math::Vec2f(0.0f);
 	}
 
-	void setScaleCallback(ScaleCallback cbk) {
+	void setScaleCallback(Window::ScaleCallback cbk) {
 		callbacks.scaleCbk = std::move(cbk);
 	}
 
-	const ScaleCallback& getScaleCallback() const {
+	const Window::ScaleCallback& getScaleCallback() const {
 		return callbacks.scaleCbk;
 	}
 
@@ -1540,11 +1436,11 @@ struct Window::Impl {
 		if(opened) opened->window.focus();
 	}
 
-	void setFocusCallback(FocusCallback cbk) {
+	void setFocusCallback(Window::FocusCallback cbk) {
 		callbacks.focusCbk = std::move(cbk);
 	}
 
-	const FocusCallback& getFocusCallback() const {
+	const Window::FocusCallback& getFocusCallback() const {
 		return callbacks.focusCbk;
 	}
 
@@ -1553,11 +1449,11 @@ struct Window::Impl {
 		return opened ? opened->window.shouldClose() : false;
 	}
 
-	void setShouldCloseCallback(ShouldCloseCallback cbk) {
+	void setShouldCloseCallback(Window::ShouldCloseCallback cbk) {
 		callbacks.shouldCloseCbk = std::move(cbk);
 	}
 
-	const ShouldCloseCallback& getShouldCloseCallback() const {
+	const Window::ShouldCloseCallback& getShouldCloseCallback() const {
 		return callbacks.shouldCloseCbk;
 	}
 
@@ -1591,7 +1487,7 @@ struct Window::Impl {
 		return decorated;
 	}
 
-	void setMonitor(const Monitor& mon) {
+	void setMonitor(const Window::Monitor& mon) {
 		monitor = getGLFWMonitor(mon);
 
 		if(opened) {
@@ -1601,47 +1497,47 @@ struct Window::Impl {
 		}
 	}
 	
-	Monitor getMonitor() const {
+	Window::Monitor getMonitor() const {
 		return constructMonitor(monitor);
 	}
 
 
 
-	KeyboardEvent getKeyState(KeyboardKey key) const {
+	Window::KeyboardEvent getKeyState(Window::KeyboardKey key) const {
 		return opened 
-		? static_cast<KeyboardEvent>(opened->window.getKeyState(static_cast<GLFW::Window::KeyboardKey>(key)))
-		: KeyboardEvent::RELEASE;
+		? static_cast<Window::KeyboardEvent>(opened->window.getKeyState(static_cast<GLFW::Window::KeyboardKey>(key)))
+		: Window::KeyboardEvent::RELEASE;
 	}
 
-	void setKeyboardCallback(KeyboardCallback cbk) {
+	void setKeyboardCallback(Window::KeyboardCallback cbk) {
 		callbacks.keyboardCbk = std::move(cbk);
 	}
 
-	const KeyboardCallback& getKeyboardCallback() const {
+	const Window::KeyboardCallback& getKeyboardCallback() const {
 		return callbacks.keyboardCbk;
 	}
 
 
-	void setCharacterCallback(CharacterCallback cbk) {
+	void setCharacterCallback(Window::CharacterCallback cbk) {
 		callbacks.characterCbk = std::move(cbk);
 	}
 
-	const CharacterCallback& getCharacterCallback() const {
+	const Window::CharacterCallback& getCharacterCallback() const {
 		return callbacks.characterCbk;
 	}
 
 
-	KeyboardEvent getMouseButtonState(MouseButton but) const {
+	Window::KeyboardEvent getMouseButtonState(Window::MouseButton but) const {
 		return opened 
-		? static_cast<KeyboardEvent>(opened->window.getMouseButtonState(static_cast<GLFW::Window::MouseButton>(but)))
-		: KeyboardEvent::RELEASE;
+		? static_cast<Window::KeyboardEvent>(opened->window.getMouseButtonState(static_cast<GLFW::Window::MouseButton>(but)))
+		: Window::KeyboardEvent::RELEASE;
 	}
 
-	void setMouseButtonCallback(MouseButtonCallback cbk) {
+	void setMouseButtonCallback(Window::MouseButtonCallback cbk) {
 		callbacks.mouseButtonCbk = std::move(cbk);
 	}
 
-	const MouseButtonCallback& getMouseButtonCallback() const {
+	const Window::MouseButtonCallback& getMouseButtonCallback() const {
 		return callbacks.mouseButtonCbk;
 	}
 
@@ -1652,39 +1548,39 @@ struct Window::Impl {
 		: Math::Vec2d();
 	}
 
-	void setMousePositionCallback(MousePositionCallback cbk) {
+	void setMousePositionCallback(Window::MousePositionCallback cbk) {
 		callbacks.mousePositionCbk = std::move(cbk);
 	}
 
-	const MousePositionCallback& getMousePositionCallback() const {
+	const Window::MousePositionCallback& getMousePositionCallback() const {
 		return callbacks.mousePositionCbk;
 	}
 
 
-	void setMouseScrollCallback(MouseScrollCallback cbk) {
+	void setMouseScrollCallback(Window::MouseScrollCallback cbk) {
 		callbacks.mouseScrollCbk = std::move(cbk);
 	}
 
-	const MouseScrollCallback& getMouseScrollCallback() const {
+	const Window::MouseScrollCallback& getMouseScrollCallback() const {
 		return callbacks.mouseScrollCbk;
 	}
 
 
-	void setCursorEnterCallback(CursorEnterCallback cbk) {
+	void setCursorEnterCallback(Window::CursorEnterCallback cbk) {
 		callbacks.cursorEnterCbk = std::move(cbk);
 	}
 
-	const CursorEnterCallback& getCursorEnterCallback() const {
+	const Window::CursorEnterCallback& getCursorEnterCallback() const {
 		return callbacks.cursorEnterCbk;
 	}
 
 
 
-	static Monitor getPrimaryMonitor() {
-		return Impl::constructMonitor(GLFW::getGLFW().getPrimaryMonitor());
+	static Window::Monitor getPrimaryMonitor() {
+		return WindowImpl::constructMonitor(GLFW::getGLFW().getPrimaryMonitor());
 	}
 
-	static std::vector<Monitor> getMonitors() {
+	static std::vector<Window::Monitor> getMonitors() {
 		const auto monitors = GLFW::getGLFW().getMonitors();
 		std::vector<Window::Monitor> result;
 		result.reserve(monitors.size());
@@ -1699,20 +1595,20 @@ struct Window::Impl {
 private:
 	GLFW::Window::Callbacks createCallbacks() {
 		return {
-			std::bind(&Impl::stateCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&Impl::positionCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&Impl::sizeCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&Impl::resolutionCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&Impl::scaleCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&Impl::shouldCloseCallback, std::ref(*this)),
+			std::bind(&WindowImpl::stateCallback, std::ref(*this), std::placeholders::_1),
+			std::bind(&WindowImpl::positionCallback, std::ref(*this), std::placeholders::_1),
+			std::bind(&WindowImpl::sizeCallback, std::ref(*this), std::placeholders::_1),
+			std::bind(&WindowImpl::resolutionCallback, std::ref(*this), std::placeholders::_1),
+			std::bind(&WindowImpl::scaleCallback, std::ref(*this), std::placeholders::_1),
+			std::bind(&WindowImpl::shouldCloseCallback, std::ref(*this)),
 			GLFW::Window::RefreshCallback(),
-			std::bind(&Impl::focusCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&Impl::keyboardCallback, std::ref(*this), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
-			std::bind(&Impl::characterCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&Impl::mouseButtonCallback, std::ref(*this), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
-			std::bind(&Impl::mousePositionCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&Impl::mouseScrollCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&Impl::cursorEnterCallback, std::ref(*this), std::placeholders::_1)
+			std::bind(&WindowImpl::focusCallback, std::ref(*this), std::placeholders::_1),
+			std::bind(&WindowImpl::keyboardCallback, std::ref(*this), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
+			std::bind(&WindowImpl::characterCallback, std::ref(*this), std::placeholders::_1),
+			std::bind(&WindowImpl::mouseButtonCallback, std::ref(*this), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
+			std::bind(&WindowImpl::mousePositionCallback, std::ref(*this), std::placeholders::_1),
+			std::bind(&WindowImpl::mouseScrollCallback, std::ref(*this), std::placeholders::_1),
+			std::bind(&WindowImpl::cursorEnterCallback, std::ref(*this), std::placeholders::_1)
 		};
 	}
 
@@ -1746,7 +1642,7 @@ private:
 		Window& win = owner.get();
 		std::lock_guard<Instance> lock(win.getInstance());
 
-		state = static_cast<State>(st);
+		state = static_cast<Window::State>(st);
 		Utils::invokeIf(callbacks.stateCbk, win, state);
 	}
 
@@ -1782,9 +1678,9 @@ private:
 		Utils::invokeIf(
 			callbacks.keyboardCbk, 
 			win, 
-			static_cast<KeyboardKey>(key),
-			static_cast<KeyboardEvent>(event),
-			static_cast<KeyboardModifiers>(mod)
+			static_cast<Window::KeyboardKey>(key),
+			static_cast<Window::KeyboardEvent>(event),
+			static_cast<Window::KeyboardModifiers>(mod)
 		);
 	}
 
@@ -1804,9 +1700,9 @@ private:
 		Utils::invokeIf(
 			callbacks.mouseButtonCbk, 
 			win, 
-			static_cast<MouseButton>(button),
-			static_cast<KeyboardEvent>(event),
-			static_cast<KeyboardModifiers>(mod)
+			static_cast<Window::MouseButton>(button),
+			static_cast<Window::KeyboardEvent>(event),
+			static_cast<Window::KeyboardModifiers>(mod)
 		);
 	}
 
@@ -1865,11 +1761,11 @@ private:
 		return std::make_tuple(fmt.extent, fmt.format, colorSpace, std::move(colorTransfer));
 	}
 
-	static Monitor constructMonitor(GLFW::Monitor mon) {
-		return Monitor(Utils::Pimpl<Monitor::Impl>({}, std::move(mon)));
+	static Window::Monitor constructMonitor(GLFW::Monitor mon) {
+		return Window::Monitor(Utils::Pimpl<Window::Monitor::Impl>({}, std::move(mon)));
 	}
 
-	static GLFW::Monitor getGLFWMonitor(const Monitor& mon) {
+	static GLFW::Monitor getGLFWMonitor(const Window::Monitor& mon) {
 		return mon.m_impl->monitor;
 	}
 };
@@ -1887,21 +1783,23 @@ Window::Window(	Instance& instance,
 				Math::Vec2i size,
 				const Monitor& mon,
 				Callbacks cbks )
-	: ZuazoBase(instance, std::move(name))
-	, VideoBase(std::move(videoMode))
-	, VideoScalerBase()
-	, m_impl({}, *this, size, mon, std::move(cbks))
+	: Utils::Pimpl<WindowImpl>({}, *this, instance, size, mon, std::move(cbks))
+	, ZuazoBase(
+		instance, std::move(name), 
+		{ (*this)->videoIn },
+		std::bind(&WindowImpl::moved, std::ref(**this), std::placeholders::_1),
+		std::bind(&WindowImpl::open, std::ref(**this), std::placeholders::_1),
+		std::bind(&WindowImpl::close, std::ref(**this), std::placeholders::_1),
+		std::bind(&WindowImpl::update, std::ref(**this)) )
+	, VideoBase(
+		std::move(videoMode),
+		std::bind(&WindowImpl::setVideoMode, std::ref(**this), std::placeholders::_1, std::placeholders::_2) )
+	, VideoScalerBase(
+		std::bind(&WindowImpl::setScalingMode, std::ref(**this), std::placeholders::_1, std::placeholders::_2),
+		std::bind(&WindowImpl::setScalingFilter, std::ref(**this), std::placeholders::_1, std::placeholders::_2) )
+	, Signal::ConsumerLayout<Video>(makeProxy((*this)->videoIn))
 {
-	Layout::registerPad(m_impl->videoIn);
-	setMoveCallback(std::bind(&Impl::moved, std::ref(*m_impl), std::placeholders::_1));
-	setOpenCallback(std::bind(&Impl::open, std::ref(*m_impl), std::placeholders::_1));
-	setCloseCallback(std::bind(&Impl::close, std::ref(*m_impl), std::placeholders::_1));
-	setUpdateCallback(std::bind(&Impl::update, std::ref(*m_impl)));
-	setVideoModeCallback(std::bind(&Impl::setVideoMode, std::ref(*m_impl), std::placeholders::_1, std::placeholders::_2));
-	setScalingModeCallback(std::bind(&Impl::setScalingMode, std::ref(*m_impl), std::placeholders::_1, std::placeholders::_2));
-	setScalingFilterCallback(std::bind(&Impl::setScalingFilter, std::ref(*m_impl), std::placeholders::_1, std::placeholders::_2));
-
-	setVideoModeCompatibility(m_impl->getVideoModeCompatibility());
+	setVideoModeCompatibility((*this)->getVideoModeCompatibility());
 }
 
 Window::Window(Window&& other) = default;
@@ -1912,290 +1810,290 @@ Window& Window::operator=(Window&& other) = default;
 
 
 void Window::setWindowName(std::string name) {
-	m_impl->setWindowName(std::move(name));
+	(*this)->setWindowName(std::move(name));
 }
 const std::string& Window::getWindowName() const {
-	return m_impl->getWindowName();
+	return (*this)->getWindowName();
 }
 
 
 void Window::setSize(Math::Vec2i size) {
-	m_impl->setSize(size);
+	(*this)->setSize(size);
 }
 
 Math::Vec2i Window::getSize() const {
-	return m_impl->getSize();
+	return (*this)->getSize();
 }
 
 void Window::setSizeCallback(SizeCallback cbk) {
-	m_impl->setSizeCallback(std::move(cbk));
+	(*this)->setSizeCallback(std::move(cbk));
 }
 
 const Window::SizeCallback& Window::getSizeCallback() const {
-	return m_impl->getSizeCallback();
+	return (*this)->getSizeCallback();
 }
 
 
 void Window::setPosition(Math::Vec2i pos) {
-	m_impl->setPosition(pos);
+	(*this)->setPosition(pos);
 }
 
 Math::Vec2i Window::getPosition() const {
-	return m_impl->getPosition();
+	return (*this)->getPosition();
 }
 
 void Window::setPositionCallback(PositionCallback cbk) {
-	m_impl->setPositionCallback(std::move(cbk));
+	(*this)->setPositionCallback(std::move(cbk));
 }
 
 const Window::PositionCallback&	Window::getPositionCallback() const {
-	return m_impl->getPositionCallback();
+	return (*this)->getPositionCallback();
 }
 
 
 void Window::setState(State state) {
-	m_impl->setState(state);
+	(*this)->setState(state);
 }
 
 Window::State Window::getState() const {
-	return m_impl->getState();
+	return (*this)->getState();
 }
 
 void Window::setStateCallback(StateCallback cbk) {
-	m_impl->setStateCallback(std::move(cbk));
+	(*this)->setStateCallback(std::move(cbk));
 }
 
 const Window::StateCallback& Window::getStateCallback() const {
-	return m_impl->getStateCallback();
+	return (*this)->getStateCallback();
 }
 
 
 Math::Vec2f Window::getScale() const {
-	return m_impl->getScale();
+	return (*this)->getScale();
 }
 
 void Window::setScaleCallback(ScaleCallback cbk) {
-	m_impl->setScaleCallback(std::move(cbk));
+	(*this)->setScaleCallback(std::move(cbk));
 }
 
 const Window::ScaleCallback& Window::getScaleCallback() const {
-	return m_impl->getScaleCallback();
+	return (*this)->getScaleCallback();
 }
 
 
 void Window::focus() {
-	m_impl->focus();
+	(*this)->focus();
 }
 
 void Window::setFocusCallback(FocusCallback cbk) {
-	m_impl->setFocusCallback(std::move(cbk));
+	(*this)->setFocusCallback(std::move(cbk));
 }
 
 const Window::FocusCallback& Window::getFocusCallback() const {
-	return m_impl->getFocusCallback();
+	return (*this)->getFocusCallback();
 }
 
 
 bool Window::shouldClose() const {
-	return m_impl->shouldClose();
+	return (*this)->shouldClose();
 }
 
 void Window::setShouldCloseCallback(ShouldCloseCallback cbk) {
-	m_impl->setShouldCloseCallback(std::move(cbk));
+	(*this)->setShouldCloseCallback(std::move(cbk));
 }
 
 const Window::ShouldCloseCallback& Window::getShouldCloseCallback() const {
-	return m_impl->getShouldCloseCallback();
+	return (*this)->getShouldCloseCallback();
 }
 
 
 void Window::setOpacity(float opa) {
-	m_impl->setOpacity(opa);
+	(*this)->setOpacity(opa);
 }
 
 float Window::getOpacity() const {
-	return m_impl->getOpacity();
+	return (*this)->getOpacity();
 }
 
 
 void Window::setResizeable(bool resizeable) {
-	m_impl->setResizeable(resizeable);
+	(*this)->setResizeable(resizeable);
 }
 
 bool Window::getResizeable() const {
-	return m_impl->getResizeable();
+	return (*this)->getResizeable();
 }
 
 
 void Window::setDecorated(bool deco) {
-	m_impl->setDecorated(deco);
+	(*this)->setDecorated(deco);
 }
 
 bool Window::getDecorated() const {
-	return m_impl->getDecorated();
+	return (*this)->getDecorated();
 }
 
 
 void Window::setMonitor(const Monitor& mon) {
-	m_impl->setMonitor(mon);
+	(*this)->setMonitor(mon);
 }
 
 Window::Monitor Window::getMonitor() const {
-	return m_impl->getMonitor();
+	return (*this)->getMonitor();
 }
 
 
 
 Window::KeyboardEvent Window::getKeyState(KeyboardKey key) const {
-	return m_impl->getKeyState(key);
+	return (*this)->getKeyState(key);
 }
 
 void Window::setKeyboardCallback(KeyboardCallback cbk) {
-	m_impl->setKeyboardCallback(std::move(cbk));
+	(*this)->setKeyboardCallback(std::move(cbk));
 }
 
 const Window::KeyboardCallback& Window::getKeyboardCallback() const {
-	return m_impl->getKeyboardCallback();
+	return (*this)->getKeyboardCallback();
 }
 
 
 void Window::setCharacterCallback(CharacterCallback cbk) {
-	m_impl->setCharacterCallback(std::move(cbk));
+	(*this)->setCharacterCallback(std::move(cbk));
 }
 
 const Window::CharacterCallback& Window::getCharacterCallback() const {
-	return m_impl->getCharacterCallback();
+	return (*this)->getCharacterCallback();
 }
 
 
 Window::KeyboardEvent Window::getMouseButtonState(MouseButton but) const {
-	return m_impl->getMouseButtonState(but);
+	return (*this)->getMouseButtonState(but);
 }
 
 void Window::setMouseButtonCallback(MouseButtonCallback cbk) {
-	m_impl->setMouseButtonCallback(std::move(cbk));
+	(*this)->setMouseButtonCallback(std::move(cbk));
 }
 
 const Window::MouseButtonCallback& Window::getMouseButtonCallback() const {
-	return m_impl->getMouseButtonCallback();
+	return (*this)->getMouseButtonCallback();
 }
 
 
 Math::Vec2d Window::getMousePosition() const {
-	return m_impl->getMousePosition();
+	return (*this)->getMousePosition();
 }
 
 void Window::setMousePositionCallback(MousePositionCallback cbk) {
-	m_impl->setMousePositionCallback(std::move(cbk));
+	(*this)->setMousePositionCallback(std::move(cbk));
 }
 
 const Window::MousePositionCallback& Window::getMousePositionCallback() const {
-	return m_impl->getMousePositionCallback();
+	return (*this)->getMousePositionCallback();
 }
 
 
 void Window::setMouseScrollCallback(MouseScrollCallback cbk) {
-	m_impl->setMouseScrollCallback(std::move(cbk));
+	(*this)->setMouseScrollCallback(std::move(cbk));
 }
 
 const Window::MouseScrollCallback& Window::getMouseScrollCallback() const {
-	return m_impl->getMouseScrollCallback();
+	return (*this)->getMouseScrollCallback();
 }
 
 
 void Window::setCursorEnterCallback(CursorEnterCallback cbk) {
-	m_impl->setCursorEnterCallback(std::move(cbk));
+	(*this)->setCursorEnterCallback(std::move(cbk));
 }
 
 const Window::CursorEnterCallback& Window::getCursorEnterCallback() const {
-	return m_impl->getCursorEnterCallback();
+	return (*this)->getCursorEnterCallback();
 }
 
 
 
 Window::Monitor Window::getPrimaryMonitor() {
-	return Impl::getPrimaryMonitor();
+	return WindowImpl::getPrimaryMonitor();
 }
 
 std::vector<Window::Monitor> Window::getMonitors() {
-	return Impl::getMonitors();
+	return WindowImpl::getMonitors();
 }
 
 }
 
 namespace Zuazo {
 
-std::string_view toString(Outputs::Window::State state) {
+std::string_view toString(Consumers::Window::State state) {
 	switch(state){
 
-	ZUAZO_ENUM2STR_CASE( Outputs::Window::State, NORMAL)
-	ZUAZO_ENUM2STR_CASE( Outputs::Window::State, HIDDEN)
-	ZUAZO_ENUM2STR_CASE( Outputs::Window::State, FULLSCREEN)
-	ZUAZO_ENUM2STR_CASE( Outputs::Window::State, ICONIFIED)
-	ZUAZO_ENUM2STR_CASE( Outputs::Window::State, MAXIMIZED)
+	ZUAZO_ENUM2STR_CASE( Consumers::Window::State, NORMAL)
+	ZUAZO_ENUM2STR_CASE( Consumers::Window::State, HIDDEN)
+	ZUAZO_ENUM2STR_CASE( Consumers::Window::State, FULLSCREEN)
+	ZUAZO_ENUM2STR_CASE( Consumers::Window::State, ICONIFIED)
+	ZUAZO_ENUM2STR_CASE( Consumers::Window::State, MAXIMIZED)
 
 	default: return "";
 	}
 }
 
-std::ostream& operator<<(std::ostream& os, Outputs::Window::State state) {
+std::ostream& operator<<(std::ostream& os, Consumers::Window::State state) {
 	return os << toString(state);
 }
 
 
-std::string_view toString(Outputs::Window::KeyboardKey key) {
+std::string_view toString(Consumers::Window::KeyboardKey key) {
 	return GLFW::Window::getKeyName(static_cast<GLFW::Window::KeyboardKey>(key), 0);
 }
 
-std::ostream& operator<<(std::ostream& os, Outputs::Window::KeyboardKey key) {
+std::ostream& operator<<(std::ostream& os, Consumers::Window::KeyboardKey key) {
 	return os << toString(key);
 }
 
 
-std::string_view toString(Outputs::Window::KeyboardEvent event) {
+std::string_view toString(Consumers::Window::KeyboardEvent event) {
 	switch(event){
 
-	ZUAZO_ENUM2STR_CASE( Outputs::Window::KeyboardEvent, RELEASE)
-	ZUAZO_ENUM2STR_CASE( Outputs::Window::KeyboardEvent, PRESS)
-	ZUAZO_ENUM2STR_CASE( Outputs::Window::KeyboardEvent, REPEAT)
+	ZUAZO_ENUM2STR_CASE( Consumers::Window::KeyboardEvent, RELEASE)
+	ZUAZO_ENUM2STR_CASE( Consumers::Window::KeyboardEvent, PRESS)
+	ZUAZO_ENUM2STR_CASE( Consumers::Window::KeyboardEvent, REPEAT)
 
 	default: return "";
 	}
 }
 
-std::ostream& operator<<(std::ostream& os, Outputs::Window::KeyboardEvent event) {
+std::ostream& operator<<(std::ostream& os, Consumers::Window::KeyboardEvent event) {
 	return os << toString(event);
 }
 
 
-std::string toString(Outputs::Window::KeyboardModifiers mod) {
+std::string toString(Consumers::Window::KeyboardModifiers mod) {
 	std::stringstream ss;
 	ss << mod;
 	return ss.str();
 }
 
-std::ostream& operator<<(std::ostream& os, Outputs::Window::KeyboardModifiers mod) {
+std::ostream& operator<<(std::ostream& os, Consumers::Window::KeyboardModifiers mod) {
 	uint32_t count = 0;
-	if((mod & Outputs::Window::KeyboardModifiers::SHIFT) != Outputs::Window::KeyboardModifiers::NONE)		os << (count++ ? " | " : "") << "SHIFT";
-	if((mod & Outputs::Window::KeyboardModifiers::CONTROL) != Outputs::Window::KeyboardModifiers::NONE)		os << (count++ ? " | " : "") << "CONTROL";
-	if((mod & Outputs::Window::KeyboardModifiers::ALT) != Outputs::Window::KeyboardModifiers::NONE)			os << (count++ ? " | " : "") << "ALT";
-	if((mod & Outputs::Window::KeyboardModifiers::SUPER) != Outputs::Window::KeyboardModifiers::NONE)		os << (count++ ? " | " : "") << "SUPER";
-	if((mod & Outputs::Window::KeyboardModifiers::CAPS_LOCK) != Outputs::Window::KeyboardModifiers::NONE)	os << (count++ ? " | " : "") << "CAPS_LOCK";
-	if((mod & Outputs::Window::KeyboardModifiers::NUM_LOCK) != Outputs::Window::KeyboardModifiers::NONE)	os << (count++ ? " | " : "") << "NUM_LOCK";
+	if((mod & Consumers::Window::KeyboardModifiers::SHIFT) != Consumers::Window::KeyboardModifiers::NONE)		os << (count++ ? " | " : "") << "SHIFT";
+	if((mod & Consumers::Window::KeyboardModifiers::CONTROL) != Consumers::Window::KeyboardModifiers::NONE)		os << (count++ ? " | " : "") << "CONTROL";
+	if((mod & Consumers::Window::KeyboardModifiers::ALT) != Consumers::Window::KeyboardModifiers::NONE)			os << (count++ ? " | " : "") << "ALT";
+	if((mod & Consumers::Window::KeyboardModifiers::SUPER) != Consumers::Window::KeyboardModifiers::NONE)		os << (count++ ? " | " : "") << "SUPER";
+	if((mod & Consumers::Window::KeyboardModifiers::CAPS_LOCK) != Consumers::Window::KeyboardModifiers::NONE)	os << (count++ ? " | " : "") << "CAPS_LOCK";
+	if((mod & Consumers::Window::KeyboardModifiers::NUM_LOCK) != Consumers::Window::KeyboardModifiers::NONE)	os << (count++ ? " | " : "") << "NUM_LOCK";
 	return os;
 }
 
 
-std::string_view toString(Outputs::Window::MouseButton but) {
+std::string_view toString(Consumers::Window::MouseButton but) {
 	switch(but) {
-	case Outputs::Window::MouseButton::LEFT: return "LEFT";
-	case Outputs::Window::MouseButton::RIGHT: return "RIGHT";
-	case Outputs::Window::MouseButton::MIDDLE: return "MIDDLE";
+	case Consumers::Window::MouseButton::LEFT: return "LEFT";
+	case Consumers::Window::MouseButton::RIGHT: return "RIGHT";
+	case Consumers::Window::MouseButton::MIDDLE: return "MIDDLE";
 	default: return "";
 	}
 }
 
-std::ostream& operator<<(std::ostream& os, Outputs::Window::MouseButton but) {
+std::ostream& operator<<(std::ostream& os, Consumers::Window::MouseButton but) {
 	return os << toString(but);
 }
 
