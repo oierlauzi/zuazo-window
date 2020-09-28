@@ -1037,26 +1037,8 @@ struct WindowImpl {
 				0.0f, 0.0f											//min, max depth bounds
 			);
 
-			constexpr auto colorWriteMask = 
-					vk::ColorComponentFlagBits::eR |				
-					vk::ColorComponentFlagBits::eG |
-					vk::ColorComponentFlagBits::eB |
-					vk::ColorComponentFlagBits::eA ;
-
 			constexpr std::array colorBlendAttachments = {
-				vk::PipelineColorBlendAttachmentState(
-					true,											//Enabled
-					//Cf' = Ai*Ci + (1.0-Ai)*Cf; Typical color mixing equation
-					vk::BlendFactor::eSrcAlpha,						//Source color weight
-					vk::BlendFactor::eOneMinusSrcAlpha,				//Destination color weight
-					vk::BlendOp::eAdd,								//Color operation
-					//Af' = Ai + (1.0-Ai)*Af = Ai + Af - Ai*Af; So that Af' is always greater than Af and Ai
-					//https://www.wolframalpha.com/input/?i=plot+%7C+x+%2B+%281-x%29+*+y+%7C+x+%3D+0+to+1+y+%3D+0+to+1
-					vk::BlendFactor::eOne,							//Source alpha weight
-					vk::BlendFactor::eOneMinusSrcAlpha,				//Destination alpha weight
-					vk::BlendOp::eAdd,								//Alpha operation
-					colorWriteMask									//Color write mask
-				)
+				Graphics::toVulkan(BlendingMode::WRITE) 			//Dont blend, just write to the framebuffer
 			};
 
 			const vk::PipelineColorBlendStateCreateInfo colorBlend(
