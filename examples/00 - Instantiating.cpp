@@ -12,6 +12,7 @@
 #include <zuazo/Consumers/Window.h>
 
 #include <mutex>
+#include <iostream>
 
 int main() {
 	//Instantiate Zuazo as usual. Note that we're loading the Window module
@@ -65,6 +66,11 @@ int main() {
 	TestSource testSrc(instance, "", testVideoMode);
 	testSrc.open();
 	window << Zuazo::Signal::getOutput<Zuazo::Video>(testSrc);
+
+	const auto& windowCompatibility = window.getVideoModeCompatibility();
+	for (const auto& comp : windowCompatibility) {
+		std::cout << "Compatibility: " << comp << std::endl;
+	}
 
 	//Done!
 	lock.unlock();

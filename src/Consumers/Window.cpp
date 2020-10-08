@@ -1307,7 +1307,8 @@ struct WindowImpl {
 				//Evaluate if it is a valid option
 				if(	(colorPrimary != ColorPrimaries::NONE) &&
 					(colorTransferFunction != ColorTransferFunction::NONE) &&
-					(format != ColorFormat::NONE) )
+					(format != ColorFormat::NONE) &&
+					(colorTransferFunction2 == ColorTransferFunction::LINEAR) ) //To avoid duplicates
 				{
 					//Copy the base compatibility in order to modify it
 					VideoMode compatibility = baseCompatibility; 
