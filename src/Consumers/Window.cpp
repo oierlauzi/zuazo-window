@@ -1291,7 +1291,7 @@ struct WindowImpl {
 				Utils::MustBe<ColorModel>(ColorModel::RGB),
 				Utils::Any<ColorTransferFunction>(),
 				Utils::MustBe<ColorSubsampling>(ColorSubsampling::RB_444),
-				Utils::MustBe<ColorRange>(ColorRange::FULL_RGB),
+				Utils::MustBe<ColorRange>(ColorRange::FULL),
 				Utils::Any<ColorFormat>()
 			);
 
