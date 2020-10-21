@@ -11,6 +11,9 @@ project(zuazo-window
 add_subdirectory(${PROJECT_SOURCE_DIR}/shaders/)
 #add_subdirectory(${PROJECT_SOURCE_DIR}/doc/doxygen/)
 
+#Check if the needed libraries are installed
+find_package(glfw3 REQUIRED)
+
 #Set compiler's options
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wpedantic")
