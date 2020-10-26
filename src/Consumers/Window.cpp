@@ -645,14 +645,14 @@ struct WindowImpl {
 						vk::DescriptorType::eUniformBuffer,				//Type
 						1,												//Count
 						vk::ShaderStageFlagBits::eVertex,				//Shader stage
-						nullptr											//Inmutable samplers
+						nullptr											//Immutable samplers
 					), 
 					vk::DescriptorSetLayoutBinding(	//UBO binding
 						WINDOW_DESCRIPTOR_COLOR_TRANSFER,				//Binding
 						vk::DescriptorType::eUniformBuffer,				//Type
 						1,												//Count
 						vk::ShaderStageFlagBits::eFragment,				//Shader stage
-						nullptr											//Inmutable samplers
+						nullptr											//Immutable samplers
 					), 
 				};
 
@@ -830,8 +830,8 @@ struct WindowImpl {
 						vk::PipelineBindPoint::eGraphics,				//Pipeline bind point
 						0, nullptr,										//Input attachments
 						attachmentReferences.size(), attachmentReferences.data(), //Color attachments
-						nullptr,										//Resolve attachemnts
-						nullptr,										//Depth / Stencil attachemnts
+						nullptr,										//Resolve attachments
+						nullptr,										//Depth / Stencil attachments
 						0, nullptr										//Preserve attachments
 					)
 				};
@@ -850,7 +850,7 @@ struct WindowImpl {
 
 				const vk::RenderPassCreateInfo createInfo(
 					{},													//Flags
-					attachments.size(), attachments.data(),				//Attachemnts
+					attachments.size(), attachments.data(),				//Attachments
 					subpasses.size(), subpasses.data(),					//Subpasses
 					subpassDependencies.size(), subpassDependencies.data()//Subpass dependencies
 				);
@@ -920,7 +920,7 @@ struct WindowImpl {
 													vk::PipelineLayout layout,
 													vk::Extent2D extent )
 		{
-			static //So that its ptr can be used as an indentifier
+			static //So that its ptr can be used as an identifier
 			#include <window_vert.h>
 			const size_t vertId = reinterpret_cast<uintptr_t>(window_vert);
 			static
@@ -1012,7 +1012,7 @@ struct WindowImpl {
 				{},													//Flags
 				false, 												//Depth clamp enabled
 				false,												//Rasterizer discard enable
-				vk::PolygonMode::eFill,								//Plygon mode
+				vk::PolygonMode::eFill,								//Polygon mode
 				vk:: CullModeFlagBits::eNone, 						//Cull faces
 				vk::FrontFace::eClockwise,							//Front face direction
 				false, 0.0f, 0.0f, 0.0f,							//Depth bias
@@ -1033,7 +1033,7 @@ struct WindowImpl {
 				vk::CompareOp::eNever, 								//Depth compare op
 				false,												//Depth bounds test
 				false, 												//Stencil enabled
-				{}, {},												//Stencil operation stete front, back
+				{}, {},												//Stencil operation state front, back
 				0.0f, 0.0f											//min, max depth bounds
 			);
 
@@ -1050,7 +1050,7 @@ struct WindowImpl {
 
 			constexpr vk::PipelineDynamicStateCreateInfo dynamicState(
 				{},													//Flags
-				0, nullptr											//Dynamis states
+				0, nullptr											//Dynamic states
 			);
 
 			static const Utils::StaticId pipelineId;
@@ -1115,12 +1115,12 @@ struct WindowImpl {
 		}
 
 		static vk::PresentModeKHR getPresentMode(const std::vector<vk::PresentModeKHR>& presentModes){
-			const std::array prefered = {
+			const std::array preferred = {
 				vk::PresentModeKHR::eMailbox,
 				vk::PresentModeKHR::eFifo //Required to be supported.
 			};
 
-			for(auto mode : prefered){
+			for(auto mode : preferred){
 				if(std::find(presentModes.cbegin(), presentModes.cend(), mode) != presentModes.cend()){
 					return mode; //Found a apropiate one
 				}
@@ -1721,7 +1721,7 @@ private:
 	{
 		const auto frameDescriptor = videoMode.getFrameDescriptor();
 
-		//Obatin the pixel format
+		//Obtain the pixel format
 		auto formats = Graphics::Frame::getPlaneDescriptors(frameDescriptor);
 		assert(formats.size() == 1);
 
@@ -1769,7 +1769,7 @@ Window::Window(	Instance& instance,
 	: Utils::Pimpl<WindowImpl>({}, *this, instance, size, mon, std::move(cbks))
 	, ZuazoBase(
 		instance, std::move(name), 
-		{ (*this)->videoIn },
+		PadRef((*this)->videoIn),
 		std::bind(&WindowImpl::moved, std::ref(**this), std::placeholders::_1),
 		std::bind(&WindowImpl::open, std::ref(**this), std::placeholders::_1),
 		std::bind(&WindowImpl::close, std::ref(**this), std::placeholders::_1),
