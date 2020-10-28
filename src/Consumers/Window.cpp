@@ -1270,9 +1270,9 @@ struct WindowImpl {
 			//Input has changed, pull a frame from it
 			const auto& frame = videoIn.pull();
 			opened->draw(frame);
-		}
 
-		hasChanged = false;
+			hasChanged = false;
+		}
 	}
 
 	std::vector<VideoMode> getVideoModeCompatibility() const {
