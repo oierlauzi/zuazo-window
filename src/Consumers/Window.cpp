@@ -663,6 +663,7 @@ struct WindowImpl {
 				result = vulkan.createDescriptorSetLayout(id, createInfo);
 			}
 
+			assert(result);
 			return result;
 		}
 
@@ -1737,7 +1738,9 @@ private:
 		//Create the color transfer characteristics
 		Graphics::OutputColorTransfer colorTransfer(frameDescriptor);
 
-		const auto& supportedFormats = vulkan.getFormatSupport().framebuffer;
+		constexpr vk::FormatFeatureFlags DESIRED_FLAGS = 
+			vk::FormatFeatureFlagBits::eColorAttachment;
+		const auto& supportedFormats = vulkan.listSupportedFormatsOptimal(DESIRED_FLAGS);
 		colorTransfer.optimize(formats, supportedFormats);
 
 		return std::make_tuple(fmt.extent, fmt.format, colorSpace, std::move(colorTransfer));
