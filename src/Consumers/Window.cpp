@@ -323,9 +323,6 @@ struct WindowImpl {
 		}
 
 		void draw(const std::shared_ptr<const Graphics::Frame>& frame) {
-			//Wait for the previous rendering to be completed
-			waitCompletion();
-
 			//Acquire an image from the swapchain
 			const auto index = acquireImage();
 
@@ -420,6 +417,10 @@ struct WindowImpl {
 			vulkan.present(*swapchain, index, renderFinishedSemaphores.front());
 		}
 
+		void waitCompletion() {
+			vulkan.waitForFences(*renderFinishedFence);
+		}
+
 	private:
 		void recreateSwapchain() {
 			const auto oldExtent = extent;
@@ -488,10 +489,6 @@ struct WindowImpl {
 				vk::PipelineStageFlagBits::eVertexShader |
 				vk::PipelineStageFlagBits::eFragmentShader
 			);
-		}
-
-		void waitCompletion() {
-			vulkan.waitForFences(*renderFinishedFence);
 		}
 
 		uint32_t acquireImage() {
@@ -1267,6 +1264,10 @@ struct WindowImpl {
 		assert(opened);
 
 		if(hasChanged || videoIn.hasChanged()) {
+			//Wait for the previous rendering to be completed
+			opened->waitCompletion();
+			
+
 			//Input has changed, pull a frame from it
 			const auto& frame = videoIn.pull();
 			opened->draw(frame);
