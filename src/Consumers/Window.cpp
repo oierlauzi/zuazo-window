@@ -582,20 +582,7 @@ struct WindowImpl {
 		static vk::CommandBuffer createCommandBuffer(	const Graphics::Vulkan& vulkan,
 														vk::CommandPool pool )
 		{
-			const vk::CommandBufferAllocateInfo allocInfo(
-				pool,
-				vk::CommandBufferLevel::ePrimary,
-				1
-			);
-
-			//Perform a manual allocation, as there is only need for one. 
-			//Dont use a smart handle, as it gets freed automatically with the command pool
-			vk::CommandBuffer result;
-			if(vulkan.getDevice().allocateCommandBuffers(&allocInfo, &result, vulkan.getDispatcher()) != vk::Result::eSuccess) {
-				throw Exception("Error allocating commnand buffers");
-			}
-
-			return result;
+			return vulkan.allocateCommnadBuffer(pool, vk::CommandBufferLevel::ePrimary).release();
 		}
 
 
@@ -684,25 +671,8 @@ struct WindowImpl {
 		static vk::DescriptorSet createDescriptorSet(	const Graphics::Vulkan& vulkan,
 														vk::DescriptorPool pool )
 		{
-			const std::array layouts {
-				createDescriptorSetLayout(vulkan)
-			};
-
-			const vk::DescriptorSetAllocateInfo allocInfo(
-				pool,													//Pool
-				layouts.size(), layouts.data()							//Layouts
-			);
-
-			//Allocate it
-			vk::DescriptorSet descriptorSet;
-			static_assert(layouts.size() == 1);
-			const auto result = vulkan.getDevice().allocateDescriptorSets(&allocInfo, &descriptorSet, vulkan.getDispatcher());
-
-			if(result != vk::Result::eSuccess){
-				throw Exception("Error allocating descriptor sets");
-			}
-
-			return descriptorSet;
+			const auto layout = createDescriptorSetLayout(vulkan);
+			return vulkan.allocateDescriptorSet(pool, layout).release();
 		}
 
 		static Graphics::Frame::Geometry createGeometry(std::byte* data,
