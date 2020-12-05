@@ -276,7 +276,6 @@ struct WindowImpl {
 
 					//Extent might have changed
 					if(oldExtent != extent) {
-						modifications.set(RECREATE_PIPELINE);
 						modifications.set(UPDATE_GEOMETRY);
 					}
 				} 
@@ -293,7 +292,7 @@ struct WindowImpl {
 				} 
 
 				if(modifications.test(RECREATE_PIPELINE)) {
-					pipeline = createPipeline(vulkan, renderPass, pipelineLayout, extent);
+					pipeline = createPipeline(vulkan, renderPass, pipelineLayout);
 				} 
 
 				if(modifications.test(UPDATE_GEOMETRY)) {
@@ -319,7 +318,7 @@ struct WindowImpl {
 
 			//Recreate the pipeline layout
 			pipelineLayout = createPipelineLayout(vulkan, filter);
-			pipeline = createPipeline(vulkan, renderPass, pipelineLayout, extent);
+			pipeline = createPipeline(vulkan, renderPass, pipelineLayout);
 		}
 
 		void draw(const std::shared_ptr<const Graphics::Frame>& frame) {
@@ -364,6 +363,27 @@ struct WindowImpl {
 
 			//If it is a valid frame, draw it.
 			if(frame) {
+				//Set the dynamic viewport
+				const std::array viewports = {
+					vk::Viewport(
+						0.0f, 0.0f,										//Origin
+						static_cast<float>(extent.width), 				//Width
+						static_cast<float>(extent.height),				//Height
+						0.0f, 1.0f										//min, max depth
+					),
+				};
+				vulkan.setViewport(commandBuffer, 0, viewports);
+
+				//Set the dynamic scissor
+				const std::array scissors = {
+					vk::Rect2D(
+						{ 0, 0 },										//Origin
+						extent											//Size
+					),
+				};
+				vulkan.setScissor(commandBuffer, 0, scissors);
+
+				//Bind the pipeline and its descriptor sets
 				vulkan.bindPipeline(commandBuffer, vk::PipelineBindPoint::eGraphics, *pipeline);
 
 				vulkan.bindVertexBuffers(
@@ -383,7 +403,7 @@ struct WindowImpl {
 				);
 
 				frame->bind(commandBuffer, pipelineLayout, DESCRIPTOR_LAYOUT_FRAME, filter);
-
+			
 				vulkan.draw(commandBuffer, Graphics::Frame::Geometry::VERTEX_COUNT, 1, 0, 0);
 			}
 
@@ -423,16 +443,9 @@ struct WindowImpl {
 
 	private:
 		void recreateSwapchain() {
-			const auto oldExtent = extent;
 			swapchain = createSwapchain(vulkan, *surface, extent, format, colorSpace, *swapchain);
 			swapchainImageViews = createImageViews(vulkan, *swapchain, format);
 			framebuffers = createFramebuffers(vulkan, renderPass, swapchainImageViews, extent);
-
-			if(extent != oldExtent) {
-				pipeline = createPipeline(vulkan, renderPass, pipelineLayout, extent);
-				geometry.setTargetSize(Math::Vec2f(extent.width, extent.height));
-				updateViewportUniform();
-			}
 		}
 
 		void updateViewportUniform() {
@@ -884,8 +897,7 @@ struct WindowImpl {
 
 		static vk::UniquePipeline createPipeline(	const Graphics::Vulkan& vulkan,
 													vk::RenderPass renderPass,
-													vk::PipelineLayout layout,
-													vk::Extent2D extent )
+													vk::PipelineLayout layout )
 		{
 			static //So that its ptr can be used as an identifier
 			#include <window_vert.h>
@@ -953,26 +965,10 @@ struct WindowImpl {
 				false												//Restart enable
 			);
 
-			const std::array viewports = {
-				vk::Viewport(
-					0.0f, 0.0f,										//Origin
-					static_cast<float>(extent.width), 				//Width
-					static_cast<float>(extent.height),				//Height
-					0.0f, 1.0f										//min, max depth
-				),
-			};
-
-			const std::array scissors = {
-				vk::Rect2D(
-					{ 0, 0 },										//Origin
-					extent											//Size
-				),
-			};
-
 			const vk::PipelineViewportStateCreateInfo viewport(
 				{},													//Flags
-				viewports.size(), viewports.data(),					//Viewports
-				scissors.size(), scissors.data()					//Scissors
+				1, nullptr,											//Viewports
+				1, nullptr											//Scissors
 			);
 
 			constexpr vk::PipelineRasterizationStateCreateInfo rasterizer(
@@ -1015,9 +1011,14 @@ struct WindowImpl {
 				colorBlendAttachments.size(), colorBlendAttachments.data() //Blend attachments
 			);
 
-			constexpr vk::PipelineDynamicStateCreateInfo dynamicState(
+			constexpr std::array dynamicStates = {
+				vk::DynamicState::eViewport,
+				vk::DynamicState::eScissor
+			};
+
+			const vk::PipelineDynamicStateCreateInfo dynamicState(
 				{},													//Flags
-				0, nullptr											//Dynamic states
+				dynamicStates.size(), dynamicStates.data()			//Dynamic states
 			);
 
 			static const Utils::StaticId pipelineId;
