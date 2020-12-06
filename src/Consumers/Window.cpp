@@ -330,18 +330,6 @@ struct WindowImpl {
 		}
 
 		void draw(const std::shared_ptr<const Graphics::Frame>& frame) {
-			//Flush the unform buffer
-			std::sort(uniformFlushAreas.begin(), uniformFlushAreas.end());
-			uniformBuffer.flushData(
-				vulkan,
-				uniformFlushAreas,
-				vulkan.getGraphicsQueueIndex(),
-				vk::AccessFlagBits::eUniformRead,
-				uniformFlushStages
-			);
-			uniformFlushAreas.clear();
-			uniformFlushStages = {};
-
 			//Acquire an image from the swapchain
 			const auto index = acquireImage();
 
@@ -383,6 +371,18 @@ struct WindowImpl {
 
 			//If it is a valid frame, draw it.
 			if(frame) {
+				//Flush the unform buffer
+				std::sort(uniformFlushAreas.begin(), uniformFlushAreas.end());
+				uniformBuffer.flushData(
+					vulkan,
+					uniformFlushAreas,
+					vulkan.getGraphicsQueueIndex(),
+					vk::AccessFlagBits::eUniformRead,
+					uniformFlushStages
+				);
+				uniformFlushAreas.clear();
+				uniformFlushStages = {};
+
 				//Set the dynamic viewport
 				const std::array viewports = {
 					vk::Viewport(
