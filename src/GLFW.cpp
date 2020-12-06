@@ -1202,7 +1202,7 @@ std::vector<vk::ExtensionProperties> GLFW::getRequiredVulkanInstanceExtensions()
 
 	std::vector<vk::ExtensionProperties> extensions(glfwExtensionCount);
 	for(size_t i = 0; i < extensions.size(); i++){
-		std::strncpy(extensions[i].extensionName, glfwExtensions[i], VK_MAX_EXTENSION_NAME_SIZE);
+		std::strncpy(extensions[i].extensionName, glfwExtensions[i], VK_MAX_EXTENSION_NAME_SIZE - 1);
 	}
 
 	return extensions;
