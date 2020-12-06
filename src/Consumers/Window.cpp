@@ -340,6 +340,7 @@ struct WindowImpl {
 				uniformFlushStages
 			);
 			uniformFlushAreas.clear();
+			uniformFlushStages = {};
 
 			//Acquire an image from the swapchain
 			const auto index = acquireImage();
