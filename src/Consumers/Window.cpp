@@ -169,6 +169,9 @@ struct WindowImpl {
 		vk::PipelineLayout							pipelineLayout;
 		vk::UniquePipeline							pipeline;
 
+		std::vector<Utils::Area>					uniformFlushAreas;
+		vk::PipelineStageFlags						uniformFlushStages;
+
 
 		Open(	const Graphics::Vulkan& vulkan,
 				Math::Vec2i size,
@@ -207,7 +210,8 @@ struct WindowImpl {
 
 		{
 			writeDescriptorSets();
-			updateUniforms();
+			updateViewportUniform();
+			updateColorTransferUniform();
 		}
 
 		~Open() {
@@ -301,9 +305,13 @@ struct WindowImpl {
 				}
 
 				//Evaluate which uniforms need to be updated
-				if(modifications.test(UPDATE_VIEWPORT) && modifications.test(UPDATE_COLOR_TRANSFER)) updateUniforms();
-				else if(modifications.test(UPDATE_VIEWPORT)) updateViewportUniform();
-				else if(modifications.test(UPDATE_COLOR_TRANSFER)) updateColorTransferUniform();
+				if(modifications.test(UPDATE_VIEWPORT)) {
+					updateViewportUniform();
+				}
+				
+				if(modifications.test(UPDATE_COLOR_TRANSFER)) {
+					updateColorTransferUniform();
+				} 
 			}
 		}
 
@@ -322,6 +330,17 @@ struct WindowImpl {
 		}
 
 		void draw(const std::shared_ptr<const Graphics::Frame>& frame) {
+			//Flush the unform buffer
+			std::sort(uniformFlushAreas.begin(), uniformFlushAreas.end());
+			uniformBuffer.flushData(
+				vulkan,
+				uniformFlushAreas,
+				vulkan.getGraphicsQueueIndex(),
+				vk::AccessFlagBits::eUniformRead,
+				uniformFlushStages
+			);
+			uniformFlushAreas.clear();
+
 			//Acquire an image from the swapchain
 			const auto index = acquireImage();
 
@@ -454,14 +473,11 @@ struct WindowImpl {
 			auto& size = *(reinterpret_cast<Math::Vec2f*>(uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].begin(uniformBuffer.data())));
 			size = geometry.getTargetSize();
 
-			uniformBuffer.flushData(
-				vulkan,
+			uniformFlushAreas.emplace_back(
 				uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].offset(),
-				uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].size(),
-				vulkan.getGraphicsQueueIndex(),
-				vk::AccessFlagBits::eUniformRead,
-				vk::PipelineStageFlagBits::eVertexShader
+				uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].size()
 			);
+			uniformFlushStages |= vk::PipelineStageFlagBits::eVertexShader;
 		}
 
 		void updateColorTransferUniform() {
@@ -473,35 +489,11 @@ struct WindowImpl {
 				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].size()
 			);
 
-			uniformBuffer.flushData(
-				vulkan,
+			uniformFlushAreas.emplace_back(
 				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].offset(),
-				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].size(),
-				vulkan.getGraphicsQueueIndex(),
-				vk::AccessFlagBits::eUniformRead,
-				vk::PipelineStageFlagBits::eFragmentShader
-			);
-		}
-
-		void updateUniforms() {
-			uniformBuffer.waitCompletion(vulkan);		
-			
-			auto& size = *(reinterpret_cast<Math::Vec2f*>(uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].begin(uniformBuffer.data())));
-			size = geometry.getTargetSize();
-
-			std::memcpy(
-				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].begin(uniformBuffer.data()),
-				colorTransfer.data(),
 				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].size()
 			);
-
-			uniformBuffer.flushData(
-				vulkan,
-				vulkan.getGraphicsQueueIndex(),
-				vk::AccessFlagBits::eUniformRead,
-				vk::PipelineStageFlagBits::eVertexShader |
-				vk::PipelineStageFlagBits::eFragmentShader
-			);
+			uniformFlushStages |= vk::PipelineStageFlagBits::eFragmentShader;
 		}
 
 		uint32_t acquireImage() {
