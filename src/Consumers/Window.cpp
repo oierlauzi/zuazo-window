@@ -169,7 +169,7 @@ struct WindowImpl {
 		vk::PipelineLayout							pipelineLayout;
 		vk::UniquePipeline							pipeline;
 
-		std::vector<Utils::Area>					uniformFlushAreas;
+		Utils::Area									uniformFlushArea;
 		vk::PipelineStageFlags						uniformFlushStages;
 
 
@@ -372,15 +372,14 @@ struct WindowImpl {
 			//If it is a valid frame, draw it.
 			if(frame) {
 				//Flush the unform buffer
-				std::sort(uniformFlushAreas.begin(), uniformFlushAreas.end());
 				uniformBuffer.flushData(
 					vulkan,
-					uniformFlushAreas,
+					uniformFlushArea,
 					vulkan.getGraphicsQueueIndex(),
 					vk::AccessFlagBits::eUniformRead,
 					uniformFlushStages
 				);
-				uniformFlushAreas.clear();
+				uniformFlushArea = {};
 				uniformFlushStages = {};
 
 				//Set the dynamic viewport
@@ -474,10 +473,9 @@ struct WindowImpl {
 			auto& size = *(reinterpret_cast<Math::Vec2f*>(uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].begin(uniformBuffer.data())));
 			size = geometry.getTargetSize();
 
-			uniformFlushAreas.emplace_back(
-				uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].offset(),
-				uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].size()
-			);
+			const auto begin = Math::min(uniformFlushArea.offset(), uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].offset());
+			const auto end = Math::max(uniformFlushArea.end(), uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].end());
+			uniformFlushArea = Utils::Area(begin, end - begin);
 			uniformFlushStages |= vk::PipelineStageFlagBits::eVertexShader;
 		}
 
@@ -490,10 +488,9 @@ struct WindowImpl {
 				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].size()
 			);
 
-			uniformFlushAreas.emplace_back(
-				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].offset(),
-				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].size()
-			);
+			const auto begin = Math::min(uniformFlushArea.offset(), uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].offset());
+			const auto end = Math::max(uniformFlushArea.end(), uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].end());
+			uniformFlushArea = Utils::Area(begin, end - begin);
 			uniformFlushStages |= vk::PipelineStageFlagBits::eFragmentShader;
 		}
 
