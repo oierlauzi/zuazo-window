@@ -473,9 +473,7 @@ struct WindowImpl {
 			auto& size = *(reinterpret_cast<Math::Vec2f*>(uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].begin(uniformBuffer.data())));
 			size = geometry.getTargetSize();
 
-			const auto begin = Math::min(uniformFlushArea.offset(), uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].offset());
-			const auto end = Math::max(uniformFlushArea.end(), uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT].end());
-			uniformFlushArea = Utils::Area(begin, end - begin);
+			uniformFlushArea |= uniformBufferLayout[WINDOW_DESCRIPTOR_VIEWPORT];
 			uniformFlushStages |= vk::PipelineStageFlagBits::eVertexShader;
 		}
 
@@ -488,9 +486,7 @@ struct WindowImpl {
 				uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].size()
 			);
 
-			const auto begin = Math::min(uniformFlushArea.offset(), uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].offset());
-			const auto end = Math::max(uniformFlushArea.end(), uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER].end());
-			uniformFlushArea = Utils::Area(begin, end - begin);
+			uniformFlushArea |= uniformBufferLayout[WINDOW_DESCRIPTOR_COLOR_TRANSFER];
 			uniformFlushStages |= vk::PipelineStageFlagBits::eFragmentShader;
 		}
 
