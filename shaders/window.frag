@@ -22,6 +22,7 @@ void main() {
 	vec4 read = ct_getColor(inColorTransfer, 
 							outColorTransfer, 
 							samplers, 
+							ct_SAMPLE_MODE_PASSTHOUGH,
 							ex_texCoord );
 
 	out_color = ct_writeColor(outColorTransfer, read);
