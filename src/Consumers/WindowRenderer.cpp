@@ -260,8 +260,14 @@ struct WindowRendererImpl {
 
 				if(modifications.test(RECREATE_SWAPCHAIN)) {
 					const auto oldExtent = extent;
-					swapchain = createSwapchain(vulkan, *surface, extent, colorFormat, colorSpace, *swapchain);
-					swapchainImageViews = createImageViews(vulkan, *swapchain, colorFormat);
+
+					if(extent != vk::Extent2D(0, 0) && colorFormat != vk::Format::eUndefined) {
+						swapchain = createSwapchain(vulkan, *surface, extent, colorFormat, colorSpace, *swapchain);
+						swapchainImageViews = createImageViews(vulkan, *swapchain, colorFormat);
+					} else {
+						swapchain.reset();
+						swapchainImageViews.clear();
+					}
 					
 					modifications.set(RECREATE_FRAMEBUFFERS);
 
@@ -273,19 +279,31 @@ struct WindowRendererImpl {
 				} 
 
 				if(modifications.test(RECREATE_DEPTHBUFFER)) {
-					depthStencilBuffer = createDepthStencilBuffer(vulkan, extent, depthStencilFormat);
+					if(extent != vk::Extent2D(0, 0) && depthStencilFormat != vk::Format::eUndefined) {
+						depthStencilBuffer = createDepthStencilBuffer(vulkan, extent, depthStencilFormat);
+					} else {
+						depthStencilBuffer.reset();
+					}
 
 					modifications.set(RECREATE_FRAMEBUFFERS);
 				}
 
 				if(modifications.test(RECREATE_RENDERPASS)) {
-					renderPass = createRenderPass(vulkan, colorFormat, depthStencilFormat);
+					if(colorFormat != vk::Format::eUndefined) {
+						renderPass = createRenderPass(vulkan, colorFormat, depthStencilFormat);
+					} else {
+						renderPass = vk::RenderPass();
+					}
 					
 					modifications.set(RECREATE_FRAMEBUFFERS);
 				}
 
 				if(modifications.test(RECREATE_FRAMEBUFFERS)) {
-					framebuffers = createFramebuffers(vulkan, renderPass, swapchainImageViews, depthStencilBuffer.get(), extent);
+					if(renderPass && swapchainImageViews.size()) {
+						framebuffers = createFramebuffers(vulkan, renderPass, swapchainImageViews, depthStencilBuffer.get(), extent);
+					} else {
+						framebuffers.clear();
+					}
 				}
 
 				if(modifications.test(UPDATE_PROJECTION_MATRIX)) {
@@ -630,13 +648,7 @@ struct WindowRendererImpl {
 																					vk::Extent2D extent,
 																					vk::Format format )
 		{
-			std::unique_ptr<Graphics::DepthStencil> result;
-			
-			if(Graphics::hasDepth(format) || Graphics::hasStencil(format)) {
-				result = Utils::makeUnique<Graphics::DepthStencil>(vulkan, extent, format);
-			}
-
-			return result;
+			return Utils::makeUnique<Graphics::DepthStencil>(vulkan, extent, format);
 		}
 
 		static vk::RenderPass createRenderPass(	const Graphics::Vulkan& vulkan, 
@@ -1280,12 +1292,35 @@ private:
 		assert(&owner.get() == &window);
 
 		if(opened) {
-			const auto [extent, colorformat, colorSpace, colorTransfer] = convertParameters(window.getInstance().getVulkan(), videoMode);
-			const auto depthStencilFormat = depthStencil ? Graphics::toVulkan(depthStencil.value()) : vk::Format::eUndefined;
-			opened->recreate(extent, colorformat, depthStencilFormat, colorSpace, colorTransfer, window.getCamera());
-
 			window.disablePeriodicUpdate();
-			window.enablePeriodicUpdate(PRIORITY, getPeriod(videoMode.getFrameRateValue()));
+
+			if(videoMode && depthStencil) {
+				const auto frameDesc = videoMode.getFrameDescriptor();
+				const auto depthStencilFormat = Graphics::toVulkan(depthStencil.value());
+				const auto [extent, colorformat, colorSpace, colorTransfer] = convertParameters(window.getInstance().getVulkan(), frameDesc);
+				const auto framePeriod = getPeriod(videoMode.getFrameRateValue());
+
+				//Update the parameters
+				opened->recreate(
+					extent, 
+					colorformat, 
+					depthStencilFormat, 
+					colorSpace, 
+					colorTransfer, 
+					window.getCamera()
+				);
+				window.enablePeriodicUpdate(PRIORITY, framePeriod);
+			} else {
+				//Unset the stuff
+				opened->recreate(
+					vk::Extent2D(0, 0), 
+					vk::Format::eUndefined, 
+					vk::Format::eUndefined, 
+					static_cast<vk::ColorSpaceKHR>(-1), 
+					Graphics::OutputColorTransfer(), 
+					window.getCamera()
+				);
+			}
 
 			hasChanged = true;
 		}
@@ -1432,49 +1467,36 @@ private:
 
 	static std::tuple<vk::Extent2D, vk::Format, vk::ColorSpaceKHR, Graphics::OutputColorTransfer>
 	convertParameters(	const Graphics::Vulkan& vulkan,
-						const VideoMode& videoMode )
+						const Graphics::Frame::Descriptor& frameDescriptor )
 	{
-		auto result = std::make_tuple(
-			vk::Extent2D(), 
-			vk::Format::eUndefined, 
-			static_cast<vk::ColorSpaceKHR>(-1), 
-			Graphics::OutputColorTransfer()
+		//Obtain the pixel format
+		auto formats = Graphics::Frame::getPlaneDescriptors(frameDescriptor);
+		assert(formats.size() == 1);
+
+		auto& fmt = formats[0];
+		std::tie(fmt.format, fmt.swizzle) = Graphics::optimizeFormat(std::make_tuple(fmt.format, fmt.swizzle));
+		assert(fmt.swizzle == vk::ComponentMapping());
+
+		//Obtain the color space
+		const auto colorSpace = Graphics::toVulkan(
+			frameDescriptor.getColorPrimaries(), 
+			frameDescriptor.getColorTransferFunction()
 		);
 
-		if(videoMode) {
-			const auto frameDescriptor = videoMode.getFrameDescriptor();
+		//Create the color transfer characteristics
+		Graphics::OutputColorTransfer colorTransfer(frameDescriptor);
 
-			//Obtain the pixel format
-			auto formats = Graphics::Frame::getPlaneDescriptors(frameDescriptor);
-			assert(formats.size() == 1);
+		constexpr vk::FormatFeatureFlags DESIRED_FLAGS = 
+			vk::FormatFeatureFlagBits::eColorAttachment;
+		const auto& supportedFormats = vulkan.listSupportedFormatsOptimal(DESIRED_FLAGS);
+		colorTransfer.optimize(formats, supportedFormats);
 
-			auto& fmt = formats[0];
-			std::tie(fmt.format, fmt.swizzle) = Graphics::optimizeFormat(std::make_tuple(fmt.format, fmt.swizzle));
-			assert(fmt.swizzle == vk::ComponentMapping());
-
-			//Obtain the color space
-			const auto colorSpace = Graphics::toVulkan(
-				videoMode.getColorPrimariesValue(), 
-				videoMode.getColorTransferFunctionValue()
-			);
-
-			//Create the color transfer characteristics
-			Graphics::OutputColorTransfer colorTransfer(frameDescriptor);
-
-			constexpr vk::FormatFeatureFlags DESIRED_FLAGS = 
-				vk::FormatFeatureFlagBits::eColorAttachment;
-			const auto& supportedFormats = vulkan.listSupportedFormatsOptimal(DESIRED_FLAGS);
-			colorTransfer.optimize(formats, supportedFormats);
-
-			result = std::make_tuple(
-				fmt.extent, 
-				fmt.format, 
-				colorSpace, 
-				std::move(colorTransfer)
-			);
-		}
-
-		return result;
+		return std::make_tuple(
+			fmt.extent, 
+			fmt.format, 
+			colorSpace, 
+			std::move(colorTransfer)
+		);
 	}
 
 	static WindowRenderer::Monitor constructMonitor(GLFW::Monitor mon) {
