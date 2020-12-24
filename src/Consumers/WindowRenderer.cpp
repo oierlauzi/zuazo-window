@@ -722,32 +722,11 @@ struct WindowRendererImpl {
 					)
 				};
 
-				//Set the dependencies //TODO maybe remove?
-				constexpr vk::PipelineStageFlags subpassDependencyStages =
-					vk::PipelineStageFlagBits::eColorAttachmentOutput 	|
-					vk::PipelineStageFlagBits::eEarlyFragmentTests 		;
-				
-				constexpr vk::AccessFlags subpassDependencyDstAccess =
-					vk::AccessFlagBits::eColorAttachmentWrite 			|
-					vk::AccessFlagBits::eColorAttachmentRead 			|
-					vk::AccessFlagBits::eDepthStencilAttachmentWrite 	;
-
-				constexpr std::array subpassDependencies = {
-					vk::SubpassDependency(
-						VK_SUBPASS_EXTERNAL,							//Source subpass
-						0,												//Destination subpass
-						subpassDependencyStages,						//Source stage
-						subpassDependencyStages,						//Destination stage
-						{},												//Source access mask
-						subpassDependencyDstAccess						//Destintation access mask
-					)
-				};
-
 				const vk::RenderPassCreateInfo createInfo(
 					{},													//Flags
 					attachmentCount, attachments.data(),				//Attachments
 					subpasses.size(), subpasses.data(),					//Subpasses
-					subpassDependencies.size(), subpassDependencies.data()//Subpass dependencies
+					0, nullptr											//Subpass dependencies
 				);
 
 				result = vulkan.createRenderPass(id, createInfo);
