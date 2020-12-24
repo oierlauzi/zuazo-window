@@ -62,7 +62,7 @@ int main(int argc, const char* argv[]) {
 	);
 
 	//Open the window (now becomes visible)
-	window.setResizeable(false); //disable resizing as extra care needs to be taken
+	window.setResizeable(false); //Disable resizeing, as extra care needs to be taken
 	window.open();
 
 	//Create a layer for rendering to the window

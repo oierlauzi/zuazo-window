@@ -306,106 +306,109 @@ struct WindowRendererImpl {
 			//Wait until any previous rendering has finished
 			waitCompletion();
 
-			//Clear all the previous dependencies from the commandbuffer
-			commandBuffer.clearDependencies();
-
 			//Acquire an image from the swapchain
-			const auto index = acquireImage();
-			const auto& frameBuffer = *(framebuffers[index]);
+			size_t index = acquireImage();
 
-			//Begin writing to the command buffer. //TODO maybe reset pool?
-			constexpr vk::CommandBufferBeginInfo cmdBegin(
-				vk::CommandBufferUsageFlagBits::eOneTimeSubmit, 
-				nullptr
-			);
-			commandBuffer.begin(cmdBegin);
+			if(index < framebuffers.size()) {
+				//Clear all the previous dependencies from the commandbuffer
+				commandBuffer.clearDependencies();
 
-			//Begin a render pass
-			const std::array clearValue = {
-				vk::ClearValue(vk::ClearColorValue(std::array{ 0.0f, 0.0f, 0.0f, 0.0f }))
-			};
-			const vk::RenderPassBeginInfo rendBegin(
-				renderPass,															//Renderpass
-				frameBuffer,														//Target framebuffer
-				vk::Rect2D({0, 0}, extent),											//Extent
-				clearValue.size(), clearValue.data()								//Attachment clear values
-			);
-			commandBuffer.beginRenderPass(rendBegin, vk::SubpassContents::eInline);
+				const auto& frameBuffer = *(framebuffers[index]);
 
-
-			//Evaluate if there are any layers
-			if(!renderer.getLayers().empty()) {
-				//Flush the unform buffer
-				uniformBuffer.flushData(
-					vulkan,
-					uniformFlushArea,
-					vulkan.getGraphicsQueueIndex(),
-					vk::AccessFlagBits::eUniformRead,
-					uniformFlushStages
+				//Begin writing to the command buffer. //TODO maybe reset pool?
+				constexpr vk::CommandBufferBeginInfo cmdBegin(
+					vk::CommandBufferUsageFlagBits::eOneTimeSubmit, 
+					nullptr
 				);
-				uniformFlushArea = {};
-				uniformFlushStages = {};
+				commandBuffer.begin(cmdBegin);
 
-				//Set the dynamic viewport
-				const std::array viewports = {
-					vk::Viewport(
-						0.0f, 0.0f,										//Origin
-						static_cast<float>(extent.width), 				//Width
-						static_cast<float>(extent.height),				//Height
-						0.0f, 1.0f										//min, max depth
-					),
+				//Begin a render pass
+				const std::array clearValue = {
+					vk::ClearValue(vk::ClearColorValue(std::array{ 0.0f, 0.0f, 0.0f, 0.0f }))
 				};
-				commandBuffer.setViewport(0, viewports);
-
-				//Set the dynamic scissor
-				const std::array scissors = {
-					vk::Rect2D(
-						{ 0, 0 },										//Origin
-						extent											//Size
-					),
-				};
-				commandBuffer.setScissor(0, scissors);
-
-				commandBuffer.bindDescriptorSets(
-					vk::PipelineBindPoint::eGraphics,					//Pipeline bind point
-					pipelineLayout,										//Pipeline layout
-					DESCRIPTOR_LAYOUT_WINDOW,							//First index
-					descriptorSet,										//Descriptor sets
-					{}													//Dynamic offsets
+				const vk::RenderPassBeginInfo rendBegin(
+					renderPass,															//Renderpass
+					frameBuffer,														//Target framebuffer
+					vk::Rect2D({0, 0}, extent),											//Extent
+					clearValue.size(), clearValue.data()								//Attachment clear values
 				);
+				commandBuffer.beginRenderPass(rendBegin, vk::SubpassContents::eInline);
 
-				//Draw all the layers
-				renderer.draw(commandBuffer);
+
+				//Evaluate if there are any layers
+				if(!renderer.getLayers().empty()) {
+					//Flush the unform buffer
+					uniformBuffer.flushData(
+						vulkan,
+						uniformFlushArea,
+						vulkan.getGraphicsQueueIndex(),
+						vk::AccessFlagBits::eUniformRead,
+						uniformFlushStages
+					);
+					uniformFlushArea = {};
+					uniformFlushStages = {};
+
+					//Set the dynamic viewport
+					const std::array viewports = {
+						vk::Viewport(
+							0.0f, 0.0f,										//Origin
+							static_cast<float>(extent.width), 				//Width
+							static_cast<float>(extent.height),				//Height
+							0.0f, 1.0f										//min, max depth
+						),
+					};
+					commandBuffer.setViewport(0, viewports);
+
+					//Set the dynamic scissor
+					const std::array scissors = {
+						vk::Rect2D(
+							{ 0, 0 },										//Origin
+							extent											//Size
+						),
+					};
+					commandBuffer.setScissor(0, scissors);
+
+					commandBuffer.bindDescriptorSets(
+						vk::PipelineBindPoint::eGraphics,					//Pipeline bind point
+						pipelineLayout,										//Pipeline layout
+						DESCRIPTOR_LAYOUT_WINDOW,							//First index
+						descriptorSet,										//Descriptor sets
+						{}													//Dynamic offsets
+					);
+
+					//Draw all the layers
+					renderer.draw(commandBuffer);
+				}
+
+				//End everything
+				commandBuffer.endRenderPass();
+				commandBuffer.end();
+
+				//Send it to the queue
+				const std::array imageAvailableSemaphores = {
+					*imageAvailableSemaphore
+				};
+				const std::array renderFinishedSemaphores = {
+					*renderFinishedSemaphore
+				};
+				const std::array commandBuffers = {
+					commandBuffer.getCommandBuffer()
+				};
+				const std::array pipelineStages = {
+					vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput)
+				};
+				const vk::SubmitInfo subInfo(
+					imageAvailableSemaphores.size(), imageAvailableSemaphores.data(),	//Wait semaphores
+					pipelineStages.data(),												//Pipeline stages
+					commandBuffers.size(), commandBuffers.data(),						//Command buffers
+					renderFinishedSemaphores.size(), renderFinishedSemaphores.data()	//Signal semaphores
+				);
+				vulkan.resetFences(*renderFinishedFence);
+				vulkan.submit(vulkan.getGraphicsQueue(), subInfo, *renderFinishedFence);
+
+				//Present it
+				vulkan.present(*swapchain, index, renderFinishedSemaphores.front());
 			}
-
-			//End everything
-			commandBuffer.endRenderPass();
-			commandBuffer.end();
-
-			//Send it to the queue
-			const std::array imageAvailableSemaphores = {
-				*imageAvailableSemaphore
-			};
-			const std::array renderFinishedSemaphores = {
-				*renderFinishedSemaphore
-			};
-			const std::array commandBuffers = {
-				commandBuffer.getCommandBuffer()
-			};
-			const std::array pipelineStages = {
-				vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-			};
-			const vk::SubmitInfo subInfo(
-				imageAvailableSemaphores.size(), imageAvailableSemaphores.data(),	//Wait semaphores
-				pipelineStages.data(),												//Pipeline stages
-				commandBuffers.size(), commandBuffers.data(),						//Command buffers
-				renderFinishedSemaphores.size(), renderFinishedSemaphores.data()	//Signal semaphores
-			);
-			vulkan.resetFences(*renderFinishedFence);
-			vulkan.submit(vulkan.getGraphicsQueue(), subInfo, *renderFinishedFence);
-
-			//Present it
-			vulkan.present(*swapchain, index, renderFinishedSemaphores.front());
 		}
 
 		void waitCompletion() {
@@ -413,12 +416,6 @@ struct WindowRendererImpl {
 		}
 
 	private:
-		void recreateSwapchain() {
-			swapchain = createSwapchain(vulkan, *surface, extent, colorFormat, colorSpace, *swapchain);
-			swapchainImageViews = createImageViews(vulkan, *swapchain, colorFormat);
-			framebuffers = createFramebuffers(vulkan, renderPass, swapchainImageViews, depthStencilBuffer.get(), extent);
-		}
-
 		void updateProjectionMatrixUniform(const WindowRenderer::Camera& cam) {
 			uniformBuffer.waitCompletion(vulkan);
 
@@ -441,36 +438,6 @@ struct WindowRendererImpl {
 
 			uniformFlushArea |= uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER];
 			uniformFlushStages |= vk::PipelineStageFlagBits::eFragmentShader;
-		}
-
-		uint32_t acquireImage() {
-			vk::Result result;
-			uint32_t index;
-
-			//Try to acquire an image as many times as needed.
-			do {
-				result = vulkan.getDevice().acquireNextImageKHR(
-					*swapchain, 						
-					Graphics::Vulkan::NO_TIMEOUT,
-					*imageAvailableSemaphore,
-					nullptr,
-					&index,
-					vulkan.getDispatcher()
-				);
-
-				//Evaluate wether it was a success
-				switch(result) {
-				case vk::Result::eErrorOutOfDateKHR:
-				case vk::Result::eSuboptimalKHR:
-					recreateSwapchain();
-					break;
-
-				default: 
-					break;
-				}
-			} while(result != vk::Result::eSuccess);
-
-			return index;
 		}
 	
 		void writeDescriptorSets() {
@@ -513,6 +480,20 @@ struct WindowRendererImpl {
 			};
 
 			vulkan.updateDescriptorSets(writeDescriptorSets, {});
+		}
+
+		size_t acquireImage() {
+			uint32_t index;
+			const vk::Result result = vulkan.getDevice().acquireNextImageKHR(
+				*swapchain, 						
+				Graphics::Vulkan::NO_TIMEOUT,
+				*imageAvailableSemaphore,
+				nullptr,
+				&index,
+				vulkan.getDispatcher()
+			);
+
+			return (result == vk::Result::eSuccess) || (result == vk::Result::eSuboptimalKHR) ? index : framebuffers.size();
 		}
 
 		static vk::UniqueCommandPool createCommandPool(const Graphics::Vulkan& vulkan)
