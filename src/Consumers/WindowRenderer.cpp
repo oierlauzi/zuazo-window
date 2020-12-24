@@ -695,6 +695,18 @@ struct WindowRendererImpl {
 					vk::AttachmentReference(
 						0, 												//Attachments index
 						vk::ImageLayout::eColorAttachmentOptimal 		//Attachemnt layout
+					),
+					vk::AttachmentReference(
+						VK_ATTACHMENT_UNUSED, 							//Attachments index
+						vk::ImageLayout::eColorAttachmentOptimal 		//Attachemnt layout
+					),
+					vk::AttachmentReference(
+						VK_ATTACHMENT_UNUSED, 							//Attachments index
+						vk::ImageLayout::eColorAttachmentOptimal 		//Attachemnt layout
+					),
+					vk::AttachmentReference(
+						VK_ATTACHMENT_UNUSED, 							//Attachments index
+						vk::ImageLayout::eColorAttachmentOptimal 		//Attachemnt layout
 					)
 				};
 
