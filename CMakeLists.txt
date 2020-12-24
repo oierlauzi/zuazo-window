@@ -8,7 +8,7 @@ project(zuazo-window
 )
 
 #Subdirectories
-add_subdirectory(${PROJECT_SOURCE_DIR}/shaders/)
+#add_subdirectory(${PROJECT_SOURCE_DIR}/shaders/)
 #add_subdirectory(${PROJECT_SOURCE_DIR}/doc/doxygen/)
 
 #Check if the needed libraries are installed
@@ -29,7 +29,7 @@ set_target_properties(
 	${PROJECT_NAME} PROPERTIES 
 		SOVERSION ${PROJECT_VERSION}	
 )
-add_dependencies(${PROJECT_NAME} shaders)
+#add_dependencies(${PROJECT_NAME} shaders)
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include/)
 target_include_directories(${PROJECT_NAME} PRIVATE ${SHADER_INCLUDE_DIR}/)
 
