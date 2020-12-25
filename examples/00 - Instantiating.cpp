@@ -6,6 +6,7 @@
  */
 
 #include <zuazo/Instance.h>
+#include <zuazo/Player.h>
 #include <zuazo/Modules/Window.h>
 #include <zuazo/Consumers/WindowRenderer.h>
 #include <zuazo/Processors/Layers/VideoSurface.h>
@@ -89,6 +90,10 @@ int main(int argc, const char* argv[]) {
 	videoClip.play();
 	videoClip.setRepeat(Zuazo::ClipBase::Repeat::REPEAT);
 	videoClip.open();
+
+	//Create a player for playing the clip
+	Zuazo::Player clipPlayer(instance, &videoClip);
+	clipPlayer.enable();
 
 	//Route the signal
 	videoSurface << videoClip;
