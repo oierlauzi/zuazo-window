@@ -7,15 +7,15 @@
 
 #include <zuazo/Instance.h>
 #include <zuazo/Modules/Window.h>
-#include <zuazo/Consumers/Window.h>
+#include <zuazo/Consumers/WindowRenderer.h>
 
 #include <mutex>
 #include <iostream>
 
 int main() {
-	//Instantiate Zuazo as usual
+	//Instantiate Zuazo as usual. Note that we're loading the Window module
 	Zuazo::Instance::ApplicationInfo appInfo(
-		"Window Example 00",						//Application's name
+		"Window Example 03",						//Application's name
 		Zuazo::Version(0, 1, 0),					//Application's version
 		Zuazo::Verbosity::GEQ_INFO,					//Verbosity 
 		{ Zuazo::Modules::Window::get() }			//Modules
@@ -23,7 +23,7 @@ int main() {
 	Zuazo::Instance instance(std::move(appInfo));
 	std::unique_lock<Zuazo::Instance> lock(instance);
 
-	//Construct the desired video mode
+	//Construct the desired parameters
 	const Zuazo::VideoMode videoMode(
 		Zuazo::Utils::MustBe<Zuazo::Rate>(Zuazo::Rate(25, 1)), //Just specify the desired rate
 		Zuazo::Utils::Any<Zuazo::Resolution>(),
@@ -36,72 +36,81 @@ int main() {
 		Zuazo::Utils::Any<Zuazo::ColorFormat>()	
 	);
 
+	const Zuazo::Utils::Limit<Zuazo::DepthStencilFormat> depthStencil(
+		Zuazo::Utils::MustBe<Zuazo::DepthStencilFormat>(Zuazo::DepthStencilFormat::NONE) //Not interested in the depth buffer
+	);
+
+	const auto windowSize = Zuazo::Math::Vec2i(1280, 720);
+
+	const auto& monitor = Zuazo::Consumers::WindowRenderer::NO_MONITOR; //Not interested in the full-screen mode
+
 	//Create a callback struct containing all callbacks. They may be modified on the go, so dont hurry
-	Zuazo::Consumers::Window::Callbacks callbacks {
+	Zuazo::Consumers::WindowRenderer::Callbacks callbacks {
 		//Size Callback
-		[] (Zuazo::Consumers::Window& win, Zuazo::Math::Vec2i size) {
+		[] (Zuazo::Consumers::WindowRenderer& win, Zuazo::Math::Vec2i size) {
 			std::cout << win.getName() << " resized: " << Zuazo::Resolution(size) << std::endl;
 		},
 
 		//Position Callback
-		[] (Zuazo::Consumers::Window& win, Zuazo::Math::Vec2i pos) {
+		[] (Zuazo::Consumers::WindowRenderer& win, Zuazo::Math::Vec2i pos) {
 			std::cout << win.getName() << " moved: " << "[" << pos.x << ", " << pos.y << "]" << std::endl;
 		},
 		
 		//State Callback
-		[] (Zuazo::Consumers::Window& win, Zuazo::Consumers::Window::State state) {
-			std::cout << win.getName() << " switched to state: " << Zuazo::toString(state) << std::endl;
+		[] (Zuazo::Consumers::WindowRenderer& win, Zuazo::Consumers::WindowRenderer::State state) {
+			//std::cout << win.getName() << " switched to state: " << Zuazo::toString(state) << std::endl; //TODO
 		},
 
 		//Scale Callback
-		[] (Zuazo::Consumers::Window& win, Zuazo::Math::Vec2f scale) {
+		[] (Zuazo::Consumers::WindowRenderer& win, Zuazo::Math::Vec2f scale) {
 			std::cout << win.getName() << " changed scale: " << "[" << scale.x << ", " << scale.y << "]" << std::endl;
 		},
 
 		//Focus Callback
-		[] (Zuazo::Consumers::Window& win, bool focus) {
+		[] (Zuazo::Consumers::WindowRenderer& win, bool focus) {
 			std::cout << win.getName() << ( focus ? " has focus" : " has *NOT* focus" ) << std::endl;
 		},
 
 		//ShouldClose Callback
-		[] (Zuazo::Consumers::Window& win) {
+		[] (Zuazo::Consumers::WindowRenderer& win) {
 			std::cout << win.getName() << " should close" << std::endl;
 		},
 
 		//Keyboard Callback
-		Zuazo::Consumers::Window::KeyboardCallback(), //Leave it empty
+		Zuazo::Consumers::WindowRenderer::KeyboardCallback(), //Leave it empty
 
 		//Character Callback
-		[] (Zuazo::Consumers::Window&, uint character) {
+		[] (Zuazo::Consumers::WindowRenderer&, uint character) {
 			std::cout << static_cast<char>(character);
 		},
 
 		//Mouse Button Callback
-		Zuazo::Consumers::Window::MouseButtonCallback(), //Leave it empty
+		Zuazo::Consumers::WindowRenderer::MouseButtonCallback(), //Leave it empty
 
 		//Mouse Position Callback
-		[] (Zuazo::Consumers::Window& win, Zuazo::Math::Vec2d pos) {
+		[] (Zuazo::Consumers::WindowRenderer& win, Zuazo::Math::Vec2d pos) {
 			std::cout << win.getName() << " mouse moved to: " << "[" << pos.x << ", " << pos.y << "]" << std::endl;
 		},
 
 		//Mouse Scroll Callback
-		[] (Zuazo::Consumers::Window& win, Zuazo::Math::Vec2d delta) {
+		[] (Zuazo::Consumers::WindowRenderer& win, Zuazo::Math::Vec2d delta) {
 			std::cout << win.getName() << " mouse scrolled: " << "[" << delta.x << ", " << delta.y << "]" << std::endl;
 		},
 
 		//Cursor Enter Callback
-		[] (Zuazo::Consumers::Window& win, bool entered) {
+		[] (Zuazo::Consumers::WindowRenderer& win, bool entered) {
 			std::cout << win.getName() << " cursor " << ( entered ? "entered" : "exited" ) << std::endl;
 		},
 	};
 
 	//Construct the window object
-	Zuazo::Consumers::Window window(
+	Zuazo::Consumers::WindowRenderer window(
 		instance, 						//Instance
 		"Output Window",				//Layout name
 		videoMode,						//Video mode limits
-		Zuazo::Math::Vec2i(1280, 720),	//Window size (in screen coordinates)
-		Zuazo::Consumers::Window::NO_MONITOR, //No monitor
+		depthStencil,					//Depth buffer limits
+		windowSize,						//Window size (in screen coordinates)
+		monitor,						//Monitor for setting fullscreen
 		std::move(callbacks)
 	);
 
@@ -110,14 +119,14 @@ int main() {
 
 	//Just another way to set callbacks:
 	window.setKeyboardCallback(
-		[] (Zuazo::Consumers::Window& win, Zuazo::Consumers::Window::KeyboardKey key, Zuazo::Consumers::Window::KeyboardEvent event, Zuazo::Consumers::Window::KeyboardModifiers mod) {
-			std::cout << win.getName() << " " << Zuazo::toString(key) << " key " << Zuazo::toString(event) << " modifier keys: " << Zuazo::toString(mod) << std::endl;
+		[] (Zuazo::Consumers::WindowRenderer& win, Zuazo::KeyboardKey key, Zuazo::KeyEvent event, Zuazo::KeyModifiers mod) {
+			std::cout << win.getName() << " " << key << " key " << event << " modifier keys: " << static_cast<int>(mod) << std::endl;
 		}
 	);
 
 	window.setMouseButtonCallback(
-		[] (Zuazo::Consumers::Window& win, Zuazo::Consumers::Window::MouseButton but, Zuazo::Consumers::Window::KeyboardEvent event, Zuazo::Consumers::Window::KeyboardModifiers mod) {
-			std::cout << win.getName() << " mouse " << Zuazo::toString(but) << " button " << Zuazo::toString(event) << " modifier keys: " << Zuazo::toString(mod) << std::endl;
+		[] (Zuazo::Consumers::WindowRenderer& win, Zuazo::MouseKey key, Zuazo::KeyEvent event, Zuazo::KeyModifiers mod) {
+			std::cout << win.getName() << " mouse " << key << " button " << event << " modifier keys: " << static_cast<int>(mod) << std::endl;
 		}
 	);
 

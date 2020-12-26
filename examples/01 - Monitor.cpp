@@ -1,23 +1,28 @@
 /*
- * This example shows how instantiate an output window and set it fullscreen
+ * This example shows how instantiate an output window
  * 
  * How to compile:
- * c++ 01\ -\ Monitor.cpp -std=c++17 -Wall -Wextra -lzuazo -lzuazo-window -lglfw -ldl -lpthread
+ * c++ 01\ -\ Monitor.cpp -std=c++17 -Wall -Wextra -lzuazo -lzuazo-window -lzuazo-ffmpeg -lzuazo-compositor -lglfw -ldl -lpthread -lavutil -lavformat -lavcodec -lswscale
  */
 
 #include <zuazo/Instance.h>
+#include <zuazo/Player.h>
 #include <zuazo/Modules/Window.h>
 #include <zuazo/Consumers/WindowRenderer.h>
 #include <zuazo/Processors/Layers/VideoSurface.h>
 #include <zuazo/Sources/FFmpegClip.h>
 
-
 #include <mutex>
 #include <iostream>
 #include <thread>
 
-int main() {
-	//Instantiate Zuazo as usual
+int main(int argc, const char* argv[]) {
+	if(argc != 2) {
+		std::cerr << "Usage: " << *argv << " <video_file>" << std::endl;
+		std::terminate();
+	}
+
+	//Instantiate Zuazo as usual. Note that we're loading the Window module
 	Zuazo::Instance::ApplicationInfo appInfo(
 		"Window Example 01",						//Application's name
 		Zuazo::Version(0, 1, 0),					//Application's version
@@ -26,14 +31,6 @@ int main() {
 	);
 	Zuazo::Instance instance(std::move(appInfo));
 	std::unique_lock<Zuazo::Instance> lock(instance);
-
-	//Query the available monitors
-	const auto monitors = Zuazo::Consumers::Window::getMonitors();
-
-	if(monitors.size() == 0) {
-		std::cerr << "No monitor is present!" << std::endl;
-		std::terminate();
-	}
 
 	//Construct the desired parameters
 	const Zuazo::VideoMode videoMode(
@@ -67,7 +64,7 @@ int main() {
 	);
 
 	//Open the window (now becomes visible)
-	window.setResizeable(false); //disable resizing as extra care needs to be taken
+	//window.setResizeable(false); //Disable resizeing, as extra care needs to be taken
 	window.open();
 
 	//Create a layer for rendering to the window
@@ -75,7 +72,7 @@ int main() {
 		instance,
 		"Video Surface",
 		&window,
-		static_cast<Zuazo::Math::Vec2f>(window.getVideoMode().getResolutionValue())
+		window.getVideoMode().getResolutionValue()
 	);
 
 	window.setLayers({videoSurface});
@@ -94,4 +91,49 @@ int main() {
 	videoClip.play();
 	videoClip.setRepeat(Zuazo::ClipBase::Repeat::REPEAT);
 	videoClip.open();
+
+	//Create a player for playing the clip
+	Zuazo::Player clipPlayer(instance, &videoClip);
+	clipPlayer.enable();
+
+	//Route the signal
+	videoSurface << videoClip;
+
+
+
+	//List all the monitors
+	const auto monitors = Zuazo::Consumers::WindowRenderer::getMonitors();
+	std::cout << "Available monitors:\n";
+	for(const auto& monitor : monitors) {
+		std::cout << "\t-" << monitor.getName() << "\n";
+	}
+
+	//Ask the user to select a monitor
+	size_t monitorSelection;
+	std::cout << "Select monitor: ";
+	lock.unlock();
+	std::cin >> monitorSelection;
+	lock.lock();
+
+	//Check if the selection is valid and set fullscreen
+	if(monitorSelection < monitors.size()) {
+		window.setMonitor(monitors[monitorSelection]);
+		videoSurface.setSize(window.getVideoMode().getResolutionValue());
+	} else {
+		std::cerr << "Invalid monitor" << std::endl;
+	}
+
+	//Wait for 10
+	lock.unlock();
+	std::this_thread::sleep_for(std::chrono::seconds(10));
+	lock.lock();
+
+	//Unset the fullscreen
+	window.setMonitor(Zuazo::Consumers::WindowRenderer::NO_MONITOR);
+	videoSurface.setSize(window.getVideoMode().getResolutionValue());
+
+	//Done!
+	lock.unlock();
+	getchar();
+	lock.lock();
 }

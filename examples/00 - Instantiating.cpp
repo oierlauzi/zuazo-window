@@ -2,7 +2,7 @@
  * This example shows how instantiate an output window
  * 
  * How to compile:
- * c++ 00\ -\ Instantiating.cpp -std=c++17 -Wall -Wextra -lzuazo -lzuazo-window -lzuazo-ffmpeg -lzuazo-compositor -lglfw -ldl -lpthread
+ * c++ 00\ -\ Instantiating.cpp -std=c++17 -Wall -Wextra -lzuazo -lzuazo-window -lzuazo-ffmpeg -lzuazo-compositor -lglfw -ldl -lpthread -lavutil -lavformat -lavcodec -lswscale
  */
 
 #include <zuazo/Instance.h>
@@ -71,7 +71,7 @@ int main(int argc, const char* argv[]) {
 		instance,
 		"Video Surface",
 		&window,
-		static_cast<Zuazo::Math::Vec2f>(window.getVideoMode().getResolutionValue())
+		window.getVideoMode().getResolutionValue()
 	);
 
 	window.setLayers({videoSurface});
