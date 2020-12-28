@@ -8,6 +8,7 @@
 #include <zuazo/Graphics/ColorTransfer.h>
 #include <zuazo/Graphics/StagedBuffer.h>
 #include <zuazo/Graphics/DepthStencil.h>
+#include <zuazo/Graphics/RenderPass.h>
 #include <zuazo/Utils/Area.h>
 #include <zuazo/Utils/CPU.h>
 #include <zuazo/Utils/StaticId.h>
@@ -142,7 +143,7 @@ struct WindowRendererImpl {
 		vk::UniqueSwapchainKHR						swapchain;
 		std::vector<vk::UniqueImageView>			swapchainImageViews;
 		std::unique_ptr<Graphics::DepthStencil>		depthStencilBuffer;
-		vk::RenderPass								renderPass;
+		Graphics::RenderPass						renderPass;
 		std::vector<vk::UniqueFramebuffer>			framebuffers;
 
 		Math::Mat4x4f&								uniformProjectionMatrix;
@@ -292,15 +293,15 @@ struct WindowRendererImpl {
 					if(colorFormat != vk::Format::eUndefined) {
 						renderPass = createRenderPass(vulkan, colorFormat, depthStencilFormat);
 					} else {
-						renderPass = vk::RenderPass();
+						renderPass = Graphics::RenderPass();
 					}
 					
 					modifications.set(RECREATE_FRAMEBUFFERS);
 				}
 
 				if(modifications.test(RECREATE_FRAMEBUFFERS)) {
-					if(renderPass && swapchainImageViews.size()) {
-						framebuffers = createFramebuffers(vulkan, renderPass, swapchainImageViews, depthStencilBuffer.get(), extent);
+					if(renderPass.getRenderPass() && swapchainImageViews.size()) {
+						framebuffers = createFramebuffers(vulkan, renderPass.getRenderPass(), swapchainImageViews, depthStencilBuffer.get(), extent);
 					} else {
 						framebuffers.clear();
 					}
@@ -345,7 +346,7 @@ struct WindowRendererImpl {
 					vk::ClearValue(vk::ClearColorValue(std::array{ 0.0f, 0.0f, 0.0f, 0.0f }))
 				};
 				const vk::RenderPassBeginInfo rendBegin(
-					renderPass,															//Renderpass
+					renderPass.getRenderPass(),											//Renderpass
 					frameBuffer,														//Target framebuffer
 					vk::Rect2D({0, 0}, extent),											//Extent
 					clearValue.size(), clearValue.data()								//Attachment clear values
@@ -651,94 +652,24 @@ struct WindowRendererImpl {
 			return Utils::makeUnique<Graphics::DepthStencil>(vulkan, extent, format);
 		}
 
-		static vk::RenderPass createRenderPass(	const Graphics::Vulkan& vulkan, 
-												vk::Format colorFormat,
-												vk::Format depthStencilFormat )
+		static Graphics::RenderPass createRenderPass(	const Graphics::Vulkan& vulkan, 
+														vk::Format colorFormat,
+														vk::Format depthStencilFormat )
 		{
-			static std::unordered_map<uint64_t, Utils::StaticId> ids;
-			constexpr auto offset = Utils::getByteSize() * sizeof(uint64_t) / 2;
-			const auto index = static_cast<uint64_t>(colorFormat) << offset | static_cast<uint64_t>(depthStencilFormat);
-			const auto id = ids[index].get();
+			const std::array planeDescriptors = {
+				Graphics::Frame::PlaneDescriptor{
+					vk::Extent2D(),
+					colorFormat,
+					vk::ComponentMapping()
+				}
+			};
 
-			auto result = vulkan.createRenderPass(id);
-			if(!result) {
-				const bool hasDepthStencil = Graphics::hasDepth(depthStencilFormat) || Graphics::hasStencil(depthStencilFormat);
-
-				//Render pass was not created
-				const std::array attachments = {
-					vk::AttachmentDescription(
-						{},												//Flags
-						colorFormat,									//Attachemnt format
-						vk::SampleCountFlagBits::e1,					//Sample count
-						vk::AttachmentLoadOp::eClear,					//Color attachment load operation
-						vk::AttachmentStoreOp::eStore,					//Color attachemnt store operation
-						vk::AttachmentLoadOp::eDontCare,				//Stencil attachment load operation
-						vk::AttachmentStoreOp::eDontCare,				//Stencil attachment store operation
-						vk::ImageLayout::eUndefined,					//Initial layout
-						vk::ImageLayout::ePresentSrcKHR					//Final layout
-					),
-					vk::AttachmentDescription(
-						{},												//Flags
-						depthStencilFormat,								//Attachemnt format
-						vk::SampleCountFlagBits::e1,					//Sample count
-						vk::AttachmentLoadOp::eClear,					//Depth attachment load operation
-						vk::AttachmentStoreOp::eDontCare,				//Depth	 attachemnt store operation
-						vk::AttachmentLoadOp::eClear,					//Stencil attachment load operation
-						vk::AttachmentStoreOp::eDontCare,				//Stencil attachment store operation
-						vk::ImageLayout::eUndefined,					//Initial layout
-						vk::ImageLayout::eDepthStencilAttachmentOptimal	//Final layout
-					)
-				};
-				const auto attachmentCount = hasDepthStencil ? attachments.size() : attachments.size() - 1;
-
-				constexpr std::array colorAttachmentReferences = {
-					vk::AttachmentReference(
-						0, 												//Attachments index
-						vk::ImageLayout::eColorAttachmentOptimal 		//Attachemnt layout
-					),
-					vk::AttachmentReference(
-						VK_ATTACHMENT_UNUSED, 							//Attachments index
-						vk::ImageLayout::eColorAttachmentOptimal 		//Attachemnt layout
-					),
-					vk::AttachmentReference(
-						VK_ATTACHMENT_UNUSED, 							//Attachments index
-						vk::ImageLayout::eColorAttachmentOptimal 		//Attachemnt layout
-					),
-					vk::AttachmentReference(
-						VK_ATTACHMENT_UNUSED, 							//Attachments index
-						vk::ImageLayout::eColorAttachmentOptimal 		//Attachemnt layout
-					)
-				};
-
-				constexpr vk::AttachmentReference depthStencilAttachmentReference(
-					1, 												//Attachments index
-					vk::ImageLayout::eDepthStencilAttachmentOptimal	//Attachemnt layout
-				);
-
-				const std::array subpasses = {
-					vk::SubpassDescription(
-						{},																	//Flags
-						vk::PipelineBindPoint::eGraphics,									//Pipeline bind point
-						0, nullptr,															//Input attachments
-						colorAttachmentReferences.size(), colorAttachmentReferences.data(), //Color attachments
-						nullptr,															//Resolve attachments
-						hasDepthStencil ? &depthStencilAttachmentReference : nullptr,		//Depth / Stencil attachments
-						0, nullptr															//Preserve attachments
-					)
-				};
-
-				const vk::RenderPassCreateInfo createInfo(
-					{},													//Flags
-					attachmentCount, attachments.data(),				//Attachments
-					subpasses.size(), subpasses.data(),					//Subpasses
-					0, nullptr											//Subpass dependencies
-				);
-
-				result = vulkan.createRenderPass(id, createInfo);
-			}
-
-			assert(result);
-			return result;
+			return Graphics::RenderPass(
+				vulkan,
+				planeDescriptors,
+				Graphics::fromVulkanDepthStencil(depthStencilFormat),
+				vk::ImageLayout::ePresentSrcKHR
+			);
 		}
 
 		static std::vector<vk::UniqueFramebuffer> createFramebuffers(	const Graphics::Vulkan& vulkan,
@@ -953,9 +884,9 @@ struct WindowRendererImpl {
 		}
 	}
 
-	vk::RenderPass getRenderPass(const RendererBase& base) {
+	Graphics::RenderPass getRenderPass(const RendererBase& base) {
 		(void)(base);
-		return opened ? opened->renderPass : vk::RenderPass();
+		return opened ? opened->renderPass : Graphics::RenderPass();
 	}
 
 	void update() {
