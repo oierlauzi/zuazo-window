@@ -329,9 +329,6 @@ struct WindowRendererImpl {
 			size_t index = acquireImage();
 
 			if(index < framebuffers.size()) {
-				//Clear all the previous dependencies from the commandbuffer
-				commandBuffer.clearDependencies();
-
 				const auto& frameBuffer = *(framebuffers[index]);
 
 				//Begin writing to the command buffer. //TODO maybe reset pool?
@@ -657,7 +654,7 @@ struct WindowRendererImpl {
 														vk::Format depthStencilFormat )
 		{
 			const std::array planeDescriptors = {
-				Graphics::Frame::PlaneDescriptor{
+				Graphics::Image::PlaneDescriptor{
 					vk::Extent2D(),
 					colorFormat,
 					vk::ComponentMapping()
