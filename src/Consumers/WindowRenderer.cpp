@@ -300,8 +300,8 @@ struct WindowRendererImpl {
 				}
 
 				if(modifications.test(RECREATE_FRAMEBUFFERS)) {
-					if(renderPass.getRenderPass() && swapchainImageViews.size()) {
-						framebuffers = createFramebuffers(vulkan, renderPass.getRenderPass(), swapchainImageViews, depthStencilBuffer.get(), extent);
+					if(renderPass.get() && swapchainImageViews.size()) {
+						framebuffers = createFramebuffers(vulkan, renderPass.get(), swapchainImageViews, depthStencilBuffer.get(), extent);
 					} else {
 						framebuffers.clear();
 					}
@@ -343,7 +343,7 @@ struct WindowRendererImpl {
 					vk::ClearValue(vk::ClearColorValue(std::array{ 0.0f, 0.0f, 0.0f, 0.0f }))
 				};
 				const vk::RenderPassBeginInfo rendBegin(
-					renderPass.getRenderPass(),											//Renderpass
+					renderPass.get(),													//Renderpass
 					frameBuffer,														//Target framebuffer
 					vk::Rect2D({0, 0}, extent),											//Extent
 					clearValue.size(), clearValue.data()								//Attachment clear values
@@ -408,7 +408,7 @@ struct WindowRendererImpl {
 					*renderFinishedSemaphore
 				};
 				const std::array commandBuffers = {
-					commandBuffer.getCommandBuffer()
+					commandBuffer.get()
 				};
 				const std::array pipelineStages = {
 					vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput)
