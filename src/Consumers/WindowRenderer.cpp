@@ -321,7 +321,7 @@ struct WindowRendererImpl {
 			updateProjectionMatrixUniform(camera);
 		}
 
-		void draw(const RendererBase& renderer) {
+		void draw(RendererBase& renderer) {
 			//Wait until any previous rendering has finished
 			waitCompletion();
 
@@ -888,7 +888,7 @@ struct WindowRendererImpl {
 
 	void update() {
 		assert(opened);
-		const auto& window = owner.get();
+		auto& window = owner.get();
 
 		if(hasChanged || window.layersHaveChanged()) {
 			opened->draw(window);
