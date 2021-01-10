@@ -65,7 +65,7 @@ int main(int argc, const char* argv[]) {
 
 	//Open the window (now becomes visible)
 	//window.setResizeable(false); //Disable resizeing, as extra care needs to be taken
-	window.open();
+	window.asyncOpen(lock);
 
 	//Create a layer for rendering to the window
 	Zuazo::Processors::Layers::VideoSurface videoSurface(
@@ -78,7 +78,7 @@ int main(int argc, const char* argv[]) {
 	window.setLayers({videoSurface});
 	videoSurface.setScalingMode(Zuazo::ScalingMode::BOXED);
 	videoSurface.setScalingFilter(Zuazo::ScalingFilter::CUBIC);
-	videoSurface.open();
+	videoSurface.asyncOpen(lock);
 
 	//Create a video source
 	Zuazo::Sources::FFmpegClip videoClip(
@@ -90,7 +90,7 @@ int main(int argc, const char* argv[]) {
 
 	videoClip.play();
 	videoClip.setRepeat(Zuazo::ClipBase::Repeat::REPEAT);
-	videoClip.open();
+	videoClip.asyncOpen(lock);
 
 	//Create a player for playing the clip
 	Zuazo::Player clipPlayer(instance, &videoClip);

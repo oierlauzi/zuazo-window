@@ -72,7 +72,7 @@ int main(int argc, const char* argv[]) {
 		auto& window = windows.back();
 		window.setWindowName(window.getName());
 		window.setResizeable(false); //Disable resizeing, as extra care needs to be taken
-		window.open();
+		window.asyncOpen(lock);
 	}
 
 	//In order to use the same surface across all windows, they need to have the same renderpass.
@@ -91,7 +91,7 @@ int main(int argc, const char* argv[]) {
 
 	videoSurface.setScalingMode(Zuazo::ScalingMode::BOXED);
 	videoSurface.setScalingFilter(Zuazo::ScalingFilter::CUBIC);
-	videoSurface.open();
+	videoSurface.asyncOpen(lock);
 
 	//Add the surface to all windows
 	for(size_t i = 0; i < windows.size(); ++i) {
@@ -108,7 +108,7 @@ int main(int argc, const char* argv[]) {
 
 	videoClip.play();
 	videoClip.setRepeat(Zuazo::ClipBase::Repeat::REPEAT);
-	videoClip.open();
+	videoClip.asyncOpen(lock);
 
 	//Create a player for playing the clip
 	Zuazo::Player clipPlayer(instance, &videoClip);

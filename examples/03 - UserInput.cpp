@@ -115,7 +115,7 @@ int main() {
 	);
 
 	//Open the window (now becomes visible)
-	window.open();
+	window.asyncOpen(lock);
 
 	//Just another way to set callbacks:
 	window.setKeyboardCallback(
