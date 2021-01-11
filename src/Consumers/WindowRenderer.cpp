@@ -9,6 +9,7 @@
 #include <zuazo/Graphics/StagedBuffer.h>
 #include <zuazo/Graphics/DepthStencil.h>
 #include <zuazo/Graphics/RenderPass.h>
+#include <zuazo/Graphics/Framebuffer.h>
 #include <zuazo/Utils/Area.h>
 #include <zuazo/Utils/CPU.h>
 #include <zuazo/Utils/StaticId.h>
@@ -20,7 +21,6 @@
 #include <set>
 #include <bitset>
 #include <mutex>
-#include <sstream>
 #include <unordered_map>
 
 namespace Zuazo::Consumers {
@@ -130,6 +130,7 @@ struct WindowRendererImpl {
 		Graphics::StagedBuffer						uniformBuffer;
 		vk::UniqueDescriptorPool					descriptorPool;
 		vk::DescriptorSet							descriptorSet;
+		vk::DescriptorSet							finalizationDescriptorSet;
 		vk::PipelineLayout							pipelineLayout;
 		vk::UniqueSemaphore 						imageAvailableSemaphore;
 		vk::UniqueSemaphore							renderFinishedSemaphore;
@@ -137,14 +138,17 @@ struct WindowRendererImpl {
 
 		vk::Extent2D								extent;
 		vk::Format 									colorFormat;
+		vk::Format									intermediateFormat;
 		vk::Format 									depthStencilFormat;
 		vk::ColorSpaceKHR 							colorSpace;
 
 		vk::UniqueSwapchainKHR						swapchain;
-		std::vector<vk::UniqueImageView>			swapchainImageViews;
-		std::unique_ptr<Graphics::DepthStencil>		depthStencilBuffer;
+		std::vector<Graphics::Image>				swapchainImages;
+		std::unique_ptr<Graphics::Image>			intermediateImage;
+		std::unique_ptr<Graphics::DepthStencil>		depthStencilImage;
 		Graphics::RenderPass						renderPass;
-		std::vector<vk::UniqueFramebuffer>			framebuffers;
+		std::vector<Graphics::Framebuffer>			framebuffers;
+		std::vector<vk::ClearValue>					clearValues;
 
 		Math::Mat4x4f&								uniformProjectionMatrix;
 		Utils::BufferView<std::byte>				uniformOutputColorTransfer;
@@ -167,6 +171,7 @@ struct WindowRendererImpl {
 			, uniformBuffer(createUniformBuffer(vulkan, uniformBufferLayout))
 			, descriptorPool(createDescriptorPool(vulkan))
 			, descriptorSet(createDescriptorSet(vulkan, *descriptorPool))
+			, finalizationDescriptorSet(createFinalizationDescriptorSet(vulkan, *descriptorPool))
 			, pipelineLayout(RendererBase::getPipelineLayout(vulkan))
 			, imageAvailableSemaphore(vulkan.createSemaphore())
 			, renderFinishedSemaphore(vulkan.createSemaphore())
@@ -174,14 +179,17 @@ struct WindowRendererImpl {
 
 			, extent(Graphics::toVulkan(window.getResolution()))
 			, colorFormat(vk::Format::eUndefined)
+			, intermediateFormat(vk::Format::eR16G16B16A16Sfloat) //TODO
 			, depthStencilFormat(vk::Format::eUndefined)
 			, colorSpace(static_cast<vk::ColorSpaceKHR>(-1))
 
 			, swapchain()
-			, swapchainImageViews()
-			, depthStencilBuffer()
+			, swapchainImages()
+			, intermediateImage()
+			, depthStencilImage()
 			, renderPass()
 			, framebuffers()
+			, clearValues{vk::ClearColorValue()}
 
 			, uniformProjectionMatrix(getProjectionMatrix(uniformBufferLayout, uniformBuffer))
 			, uniformOutputColorTransfer(getOutputColorTransfer(uniformBufferLayout, uniformBuffer))
@@ -205,9 +213,11 @@ struct WindowRendererImpl {
 		{
 			enum {
 				RECREATE_SWAPCHAIN,
-				RECREATE_DEPTHBUFFER,
+				RECREATE_INTERMEDIATE_IMAGE,
+				RECREATE_DEPTH_STENCIL_IMAGE,
 				RECREATE_RENDERPASS,
 				RECREATE_FRAMEBUFFERS,
+				RECREATE_CLEAR_VALUES,
 				UPDATE_PROJECTION_MATRIX,
 				UPDATE_OUTPUT_COLOR_TRANSFER,
 
@@ -221,7 +231,8 @@ struct WindowRendererImpl {
 				extent = ext;
 
 				modifications.set(RECREATE_SWAPCHAIN);
-				modifications.set(RECREATE_DEPTHBUFFER);
+				modifications.set(RECREATE_INTERMEDIATE_IMAGE);
+				modifications.set(RECREATE_DEPTH_STENCIL_IMAGE);
 				modifications.set(UPDATE_PROJECTION_MATRIX);
 			}
 
@@ -230,6 +241,7 @@ struct WindowRendererImpl {
 				colorFormat = colorFmt;
 
 				modifications.set(RECREATE_SWAPCHAIN);
+				modifications.set(RECREATE_INTERMEDIATE_IMAGE);
 				modifications.set(RECREATE_RENDERPASS);
 			}
 
@@ -237,7 +249,7 @@ struct WindowRendererImpl {
 				//Depth/Stencil format has changed
 				depthStencilFormat = depthStencilFmt;
 
-				modifications.set(RECREATE_DEPTHBUFFER);
+				modifications.set(RECREATE_DEPTH_STENCIL_IMAGE);
 				modifications.set(RECREATE_RENDERPASS);
 			}
 
@@ -251,6 +263,7 @@ struct WindowRendererImpl {
 			assert(uniformOutputColorTransfer.size() == ct.size());
 			if(std::memcmp(uniformOutputColorTransfer.data(), ct.data(), ct.size())) {
 				//Color transfer has changed
+				modifications.set(RECREATE_INTERMEDIATE_IMAGE);
 				modifications.set(UPDATE_OUTPUT_COLOR_TRANSFER);
 			}
 
@@ -264,34 +277,47 @@ struct WindowRendererImpl {
 
 					if(extent != vk::Extent2D(0, 0) && colorFormat != vk::Format::eUndefined) {
 						swapchain = createSwapchain(vulkan, *surface, extent, colorFormat, colorSpace, *swapchain);
-						swapchainImageViews = createImageViews(vulkan, *swapchain, colorFormat);
+						swapchainImages = createSwapchainImages(vulkan, *swapchain, extent, colorFormat);
 					} else {
 						swapchain.reset();
-						swapchainImageViews.clear();
+						swapchainImages.clear();
 					}
 					
 					modifications.set(RECREATE_FRAMEBUFFERS);
 
 					//Extent might have changed
 					if(oldExtent != extent) {
-						modifications.set(RECREATE_DEPTHBUFFER);
+						modifications.set(RECREATE_INTERMEDIATE_IMAGE);
+						modifications.set(RECREATE_DEPTH_STENCIL_IMAGE);
 						modifications.set(UPDATE_PROJECTION_MATRIX);
 					}
 				} 
 
-				if(modifications.test(RECREATE_DEPTHBUFFER)) {
-					if(extent != vk::Extent2D(0, 0) && depthStencilFormat != vk::Format::eUndefined) {
-						depthStencilBuffer = createDepthStencilBuffer(vulkan, extent, depthStencilFormat);
+				if(modifications.test(RECREATE_INTERMEDIATE_IMAGE)) {
+					if(extent != vk::Extent2D(0, 0) && intermediateFormat != vk::Format::eUndefined) {
+						intermediateImage = createIntermediateImage(vulkan, extent, intermediateFormat);
+						writeFinalizationDescriptorSets(*(intermediateImage->getPlanes().front().imageView));
 					} else {
-						depthStencilBuffer.reset();
+						intermediateImage.reset();
 					}
 
 					modifications.set(RECREATE_FRAMEBUFFERS);
 				}
 
+				if(modifications.test(RECREATE_DEPTH_STENCIL_IMAGE)) {
+					if(extent != vk::Extent2D(0, 0) && depthStencilFormat != vk::Format::eUndefined) {
+						depthStencilImage = createDepthStencilImage(vulkan, extent, depthStencilFormat);
+					} else {
+						depthStencilImage.reset();
+					}
+
+					modifications.set(RECREATE_FRAMEBUFFERS);
+					modifications.set(RECREATE_CLEAR_VALUES);
+				}
+
 				if(modifications.test(RECREATE_RENDERPASS)) {
 					if(colorFormat != vk::Format::eUndefined) {
-						renderPass = createRenderPass(vulkan, colorFormat, depthStencilFormat);
+						renderPass = createRenderPass(vulkan, colorFormat, intermediateFormat, depthStencilFormat);
 					} else {
 						renderPass = Graphics::RenderPass();
 					}
@@ -300,11 +326,15 @@ struct WindowRendererImpl {
 				}
 
 				if(modifications.test(RECREATE_FRAMEBUFFERS)) {
-					if(renderPass.get() && swapchainImageViews.size()) {
-						framebuffers = createFramebuffers(vulkan, renderPass.get(), swapchainImageViews, depthStencilBuffer.get(), extent);
+					if(renderPass.get() && swapchainImages.size()) {
+						framebuffers = createFramebuffers(vulkan, extent, swapchainImages, intermediateImage.get(), depthStencilImage.get(), renderPass);
 					} else {
 						framebuffers.clear();
 					}
+				}
+
+				if(modifications.test(RECREATE_CLEAR_VALUES)) {
+					clearValues = Graphics::RenderPass::getClearValues(Graphics::fromVulkanDepthStencil(depthStencilFormat));
 				}
 
 				if(modifications.test(UPDATE_PROJECTION_MATRIX)) {
@@ -329,7 +359,7 @@ struct WindowRendererImpl {
 			size_t index = acquireImage();
 
 			if(index < framebuffers.size()) {
-				const auto& frameBuffer = *(framebuffers[index]);
+				const auto frameBuffer = framebuffers[index].get();
 
 				//Begin writing to the command buffer. //TODO maybe reset pool?
 				constexpr vk::CommandBufferBeginInfo cmdBegin(
@@ -339,20 +369,16 @@ struct WindowRendererImpl {
 				commandBuffer.begin(cmdBegin);
 
 				//Begin a render pass
-				const std::array clearValue = {
-					vk::ClearValue(vk::ClearColorValue(std::array{ 0.0f, 0.0f, 0.0f, 0.0f }))
-				};
 				const vk::RenderPassBeginInfo rendBegin(
 					renderPass.get(),													//Renderpass
 					frameBuffer,														//Target framebuffer
 					vk::Rect2D({0, 0}, extent),											//Extent
-					clearValue.size(), clearValue.data()								//Attachment clear values
+					clearValues.size(), clearValues.data()								//Attachment clear values
 				);
 				commandBuffer.beginRenderPass(rendBegin, vk::SubpassContents::eInline);
 
-
-				//Evaluate if there are any layers
-				if(!renderer.getLayers().empty()) {
+				//Ensure that everything is up to date
+				if(!renderer.getLayers().empty() || intermediateImage) {
 					//Flush the unform buffer
 					uniformBuffer.flushData(
 						vulkan,
@@ -383,6 +409,11 @@ struct WindowRendererImpl {
 						),
 					};
 					commandBuffer.setScissor(0, scissors);
+				}
+
+				//Evaluate if there are any layers
+				if(!renderer.getLayers().empty()) {
+					assert(uniformFlushArea.size() == 0 && uniformFlushStages == vk::PipelineStageFlags());
 
 					commandBuffer.bindDescriptorSets(
 						vk::PipelineBindPoint::eGraphics,					//Pipeline bind point
@@ -394,6 +425,20 @@ struct WindowRendererImpl {
 
 					//Draw all the layers
 					renderer.draw(commandBuffer);
+				}
+
+				//Finalize the renderpass if needed
+				if(intermediateImage) {
+					assert(uniformFlushArea.size() == 0 && uniformFlushStages == vk::PipelineStageFlags());
+
+					commandBuffer.bindDescriptorSets(
+						vk::PipelineBindPoint::eGraphics,							//Pipeline bind point
+						Graphics::RenderPass::getFinalizationPipelineLayout(vulkan),//Pipeline layout
+						DESCRIPTOR_LAYOUT_WINDOW,									//First index //TODO
+						finalizationDescriptorSet,									//Descriptor sets
+						{}															//Dynamic offsets
+					);
+					renderPass.finalize(vulkan, commandBuffer.get());
 				}
 
 				//End everything
@@ -457,7 +502,7 @@ struct WindowRendererImpl {
 		}
 	
 		void writeDescriptorSets() {
-			const std::array viewportBuffers = {
+			const std::array projectionMatrixBuffers = {
 				vk::DescriptorBufferInfo(
 					uniformBuffer.getBuffer(),															//Buffer
 					uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_PROJECTION_MATRIX].offset(),	//Offset
@@ -477,10 +522,10 @@ struct WindowRendererImpl {
 					descriptorSet,											//Descriptor set
 					RendererBase::DESCRIPTOR_BINDING_PROJECTION_MATRIX,		//Binding
 					0, 														//Index
-					viewportBuffers.size(),									//Descriptor count		
+					projectionMatrixBuffers.size(),							//Descriptor count		
 					vk::DescriptorType::eUniformBuffer,						//Descriptor type
 					nullptr, 												//Images 
-					viewportBuffers.data(), 								//Buffers
+					projectionMatrixBuffers.data(), 						//Buffers
 					nullptr													//Texel buffers
 				),
 				vk::WriteDescriptorSet( //ColorTransfer UBO
@@ -493,6 +538,50 @@ struct WindowRendererImpl {
 					colorTransferBuffers.data(), 							//Buffers
 					nullptr													//Texel buffers
 				)
+			};
+
+			vulkan.updateDescriptorSets(writeDescriptorSets, {});
+		}
+
+		void writeFinalizationDescriptorSets(vk::ImageView intermediateImageView) {
+			const std::array colorTransferBuffers = {
+				vk::DescriptorBufferInfo( //This buffer is shared with the other descriptor set, its indices are use to access offsets
+					uniformBuffer.getBuffer(),																//Buffer
+					uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER].offset(),	//Offset
+					uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER].size()		//Size
+				)
+			};
+
+			const std::array inputAttachment = {
+				vk::DescriptorImageInfo(
+					vk::Sampler(),											//Sampler
+					intermediateImageView,									//Image view
+					vk::ImageLayout::eShaderReadOnlyOptimal					//Image layout
+				)
+			};
+
+
+			const std::array writeDescriptorSets = {
+				vk::WriteDescriptorSet( //ColorTransfer UBO
+					finalizationDescriptorSet,								//Descriptor set
+					0,														//Binding //TODO
+					0, 														//Index
+					colorTransferBuffers.size(),							//Descriptor count		
+					vk::DescriptorType::eUniformBuffer,						//Descriptor type
+					nullptr, 												//Images 
+					colorTransferBuffers.data(), 							//Buffers
+					nullptr													//Texel buffers
+				),
+				vk::WriteDescriptorSet( //Viewport UBO
+					finalizationDescriptorSet,								//Descriptor set
+					1,														//Binding //TODO
+					0, 														//Index
+					inputAttachment.size(),									//Descriptor count		
+					vk::DescriptorType::eInputAttachment,					//Descriptor type
+					inputAttachment.data(), 								//Images 
+					nullptr, 												//Buffers
+					nullptr													//Texel buffers
+				),
 			};
 
 			vulkan.updateDescriptorSets(writeDescriptorSets, {});
@@ -549,13 +638,17 @@ struct WindowRendererImpl {
 			const std::array poolSizes = {
 				vk::DescriptorPoolSize(
 					vk::DescriptorType::eUniformBuffer,					//Descriptor type
-					RendererBase::DESCRIPTOR_COUNT						//Descriptor count
-				)
+					RendererBase::DESCRIPTOR_COUNT + 1					//Descriptor count //TODO
+				),
+				vk::DescriptorPoolSize(
+					vk::DescriptorType::eInputAttachment,				//Descriptor type
+					1													//Descriptor count //TODO
+				),
 			};
 
 			const vk::DescriptorPoolCreateInfo createInfo(
 				{},														//Flags
-				1,														//Descriptor set count
+				2,														//Descriptor set count
 				poolSizes.size(), poolSizes.data()						//Pool sizes
 			);
 
@@ -566,6 +659,13 @@ struct WindowRendererImpl {
 														vk::DescriptorPool pool )
 		{
 			const auto layout = RendererBase::getDescriptorSetLayout(vulkan);
+			return vulkan.allocateDescriptorSet(pool, layout).release();
+		}
+
+		static vk::DescriptorSet createFinalizationDescriptorSet(	const Graphics::Vulkan& vulkan,
+																	vk::DescriptorPool pool )
+		{
+			const auto layout = Graphics::RenderPass::getFinalizationDescriptorSetLayout(vulkan);
 			return vulkan.allocateDescriptorSet(pool, layout).release();
 		}
 
@@ -616,41 +716,77 @@ struct WindowRendererImpl {
 			return vulkan.createSwapchain(createInfo);
 		}
 
-		static std::vector<vk::UniqueImageView> createImageViews(	const Graphics::Vulkan& vulkan,
+		static std::vector<Graphics::Image> createSwapchainImages(	const Graphics::Vulkan& vulkan,
 																	vk::SwapchainKHR swapchain,
+																	vk::Extent2D extent,
 																	vk::Format format ) 
 		{
 			const auto images = vulkan.getDevice().getSwapchainImagesKHR(swapchain, vulkan.getDispatcher());
-			std::vector<vk::UniqueImageView> result(images.size());
+			std::vector<Graphics::Image> result;
+			result.reserve(images.size());
+
+			const std::array planes = {
+				Graphics::Image::PlaneDescriptor{ extent, format, vk::ComponentMapping() }	
+			};
 
 			for(size_t i = 0; i < images.size(); i++){
-				const vk::ImageViewCreateInfo createInfo(
-					{},												//Flags
-					images[i],										//Image
-					vk::ImageViewType::e2D,							//ImageView type
-					format,											//Image format
-					{},												//Swizzle
-					vk::ImageSubresourceRange(						//Image subresources
-						vk::ImageAspectFlagBits::eColor,				//Aspect mask
-						0, 1, 0, 1										//Base mipmap level, mipmap levels, base array layer, layers
-					)
+				result.emplace_back(
+					vulkan,
+					planes,
+					images[i],
+					vk::ImageUsageFlagBits::eColorAttachment
 				);
-
-				result[i] =  vulkan.createImageView(createInfo);
 			}
 
 			return result;
 		}
 
-		static std::unique_ptr<Graphics::DepthStencil> createDepthStencilBuffer(	const Graphics::Vulkan& vulkan,
-																					vk::Extent2D extent,
-																					vk::Format format )
+		static std::unique_ptr<Graphics::Image> createIntermediateImage(const Graphics::Vulkan& vulkan,
+																		vk::Extent2D extent,
+																		vk::Format format )
+		{
+			std::unique_ptr<Graphics::Image> result;
+
+			if(format != vk::Format::eUndefined) {
+				const std::array planes = {
+					Graphics::Image::PlaneDescriptor{ extent, format, vk::ComponentSwizzle() }
+				};
+
+				constexpr vk::ImageUsageFlags usage = 
+					vk::ImageUsageFlagBits::eColorAttachment |
+					vk::ImageUsageFlagBits::eTransientAttachment |
+					vk::ImageUsageFlagBits::eInputAttachment ;
+
+
+				constexpr vk::ImageTiling tiling = vk::ImageTiling::eOptimal;
+
+				constexpr vk::MemoryPropertyFlags memory =
+					vk::MemoryPropertyFlagBits::eDeviceLocal |
+					vk::MemoryPropertyFlagBits::eLazilyAllocated ;
+
+				
+				result = Utils::makeUnique<Graphics::Image>(
+					vulkan,
+					planes,
+					usage,
+					tiling,
+					memory
+				);
+			}
+
+			return result;
+		}
+
+		static std::unique_ptr<Graphics::DepthStencil> createDepthStencilImage(	const Graphics::Vulkan& vulkan,
+																				vk::Extent2D extent,
+																				vk::Format format )
 		{
 			return Utils::makeUnique<Graphics::DepthStencil>(vulkan, extent, format);
 		}
 
 		static Graphics::RenderPass createRenderPass(	const Graphics::Vulkan& vulkan, 
 														vk::Format colorFormat,
+														vk::Format intermediaryFormat,
 														vk::Format depthStencilFormat )
 		{
 			const std::array planeDescriptors = {
@@ -665,36 +801,33 @@ struct WindowRendererImpl {
 				vulkan,
 				planeDescriptors,
 				Graphics::fromVulkanDepthStencil(depthStencilFormat),
+				intermediaryFormat,
 				vk::ImageLayout::ePresentSrcKHR
 			);
 		}
 
-		static std::vector<vk::UniqueFramebuffer> createFramebuffers(	const Graphics::Vulkan& vulkan,
-																		vk::RenderPass renderPass,
-																		const std::vector<vk::UniqueImageView>& imageViews,
-																		const Graphics::DepthStencil* depthBuffer,
-																		vk::Extent2D extent )
+		static std::vector<Graphics::Framebuffer> createFramebuffers(	const Graphics::Vulkan& vulkan,
+																		vk::Extent2D extent,
+																		const std::vector<Graphics::Image>& swapchainImages,
+																		const Graphics::Image* intermediaryImage,
+																		const Graphics::DepthStencil* depthBufferImage,
+																		const Graphics::RenderPass renderPass )
 		{
-			std::vector<vk::UniqueFramebuffer> result(imageViews.size());
+			std::vector<Graphics::Framebuffer> result;
+			result.reserve(swapchainImages.size());
 
-			for(size_t i = 0; i < result.size(); i++){
-				const std::array attachments = {
-					*imageViews[i],
-					depthBuffer ? depthBuffer->getImageView() : vk::ImageView()
-				};
-
-				const vk::FramebufferCreateInfo createInfo(
-					{},
-					renderPass,
-					depthBuffer ? attachments.size() : attachments.size() - 1,
-					attachments.data(),
-					extent.width, extent.height,
-					1
+			for(size_t i = 0; i < swapchainImages.size(); i++){
+				result.emplace_back(
+					vulkan,
+					Graphics::fromVulkan(extent),
+					swapchainImages[i],
+					intermediaryImage,
+					depthBufferImage,
+					renderPass
 				);
-
-				result[i] = vulkan.createFramebuffer(createInfo);
 			}
 
+			assert(swapchainImages.size() == result.size());
 			return result;
 		}
 
