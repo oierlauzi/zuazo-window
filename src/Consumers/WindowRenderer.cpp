@@ -179,7 +179,7 @@ struct WindowRendererImpl {
 
 			, extent(Graphics::toVulkan(window.getResolution()))
 			, colorFormat(vk::Format::eUndefined)
-			, intermediateFormat(vk::Format::eR16G16B16A16Sfloat) //TODO
+			, intermediateFormat(vk::Format::eUndefined)
 			, depthStencilFormat(vk::Format::eUndefined)
 			, colorSpace(static_cast<vk::ColorSpaceKHR>(-1))
 
@@ -207,7 +207,7 @@ struct WindowRendererImpl {
 		void recreate(	vk::Extent2D ext, 
 						vk::Format colorFmt, 
 						vk::Format depthStencilFmt,
-						vk::ColorSpaceKHR cs, 
+						vk::ColorSpaceKHR cs,
 						const Graphics::OutputColorTransfer& ct,
 						const WindowRenderer::Camera& cam ) 
 		{
@@ -294,14 +294,24 @@ struct WindowRendererImpl {
 				} 
 
 				if(modifications.test(RECREATE_INTERMEDIATE_IMAGE)) {
-					if(extent != vk::Extent2D(0, 0) && intermediateFormat != vk::Format::eUndefined) {
-						intermediateImage = createIntermediateImage(vulkan, extent, intermediateFormat);
-						writeFinalizationDescriptorSets(*(intermediateImage->getPlanes().front().imageView));
-					} else {
-						intermediateImage.reset();
-					}
+					const std::array planes = {
+						Graphics::Image::PlaneDescriptor{ extent, colorFormat, vk::ComponentMapping() }
+					};
 
-					modifications.set(RECREATE_FRAMEBUFFERS);
+					const auto oldIntermediateFormat = intermediateFormat;
+					intermediateFormat = Graphics::RenderPass::getIntermediateFormat(vulkan, planes, ct);
+
+					if(intermediateFormat != oldIntermediateFormat) {
+						//Intermediate format has changed
+						if(extent != vk::Extent2D(0, 0) && intermediateFormat != vk::Format::eUndefined) {
+							intermediateImage = createIntermediateImage(vulkan, extent, intermediateFormat);
+							writeFinalizationDescriptorSets(*(intermediateImage->getPlanes().front().imageView));
+						} else {
+							intermediateImage.reset();
+						}
+
+						modifications.set(RECREATE_FRAMEBUFFERS);
+					}
 				}
 
 				if(modifications.test(RECREATE_DEPTH_STENCIL_IMAGE)) {
@@ -434,7 +444,7 @@ struct WindowRendererImpl {
 					commandBuffer.bindDescriptorSets(
 						vk::PipelineBindPoint::eGraphics,							//Pipeline bind point
 						Graphics::RenderPass::getFinalizationPipelineLayout(vulkan),//Pipeline layout
-						DESCRIPTOR_LAYOUT_WINDOW,									//First index //TODO
+						DESCRIPTOR_LAYOUT_WINDOW,									//First index
 						finalizationDescriptorSet,									//Descriptor sets
 						{}															//Dynamic offsets
 					);
@@ -564,7 +574,7 @@ struct WindowRendererImpl {
 			const std::array writeDescriptorSets = {
 				vk::WriteDescriptorSet( //ColorTransfer UBO
 					finalizationDescriptorSet,								//Descriptor set
-					0,														//Binding //TODO
+					Graphics::RenderPass::FINALIZATION_DESCRIPTOR_BINDING_COLOR_TRANSFER, //Binding
 					0, 														//Index
 					colorTransferBuffers.size(),							//Descriptor count		
 					vk::DescriptorType::eUniformBuffer,						//Descriptor type
@@ -574,7 +584,7 @@ struct WindowRendererImpl {
 				),
 				vk::WriteDescriptorSet( //Viewport UBO
 					finalizationDescriptorSet,								//Descriptor set
-					1,														//Binding //TODO
+					Graphics::RenderPass::FINALIZATION_DESCRIPTOR_BINDING_INPUT_ATTACHMENT, //Binding
 					0, 														//Index
 					inputAttachment.size(),									//Descriptor count		
 					vk::DescriptorType::eInputAttachment,					//Descriptor type
@@ -635,14 +645,22 @@ struct WindowRendererImpl {
 		}
 
 		static vk::UniqueDescriptorPool createDescriptorPool(const Graphics::Vulkan& vulkan){
+			constexpr auto UNIFORM_BUFFER_COUNT = 
+				RendererBase::DESCRIPTOR_UNIFORM_BUFFER_COUNT +
+				Graphics::RenderPass::FINALIZATION_DESCRIPTOR_UNIFORM_BUFFER_COUNT ;
+
+			constexpr auto INPUT_ATTACHMENT_COUNT =
+				RendererBase::DESCRIPTOR_INPUT_ATTACHMENT_COUNT +
+				Graphics::RenderPass::FINALIZATION_DESCRIPTOR_INPUT_ATTACHMENT_COUNT ;
+
 			const std::array poolSizes = {
 				vk::DescriptorPoolSize(
 					vk::DescriptorType::eUniformBuffer,					//Descriptor type
-					RendererBase::DESCRIPTOR_COUNT + 1					//Descriptor count //TODO
+					UNIFORM_BUFFER_COUNT 								//Descriptor count
 				),
 				vk::DescriptorPoolSize(
 					vk::DescriptorType::eInputAttachment,				//Descriptor type
-					1													//Descriptor count //TODO
+					INPUT_ATTACHMENT_COUNT								//Descriptor count
 				),
 			};
 
