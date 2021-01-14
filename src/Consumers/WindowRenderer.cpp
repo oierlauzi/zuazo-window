@@ -10,6 +10,7 @@
 #include <zuazo/Graphics/DepthStencil.h>
 #include <zuazo/Graphics/RenderPass.h>
 #include <zuazo/Graphics/Framebuffer.h>
+#include <zuazo/Graphics/UniformBuffer.h>
 #include <zuazo/Utils/Area.h>
 #include <zuazo/Utils/CPU.h>
 #include <zuazo/Utils/StaticId.h>
@@ -114,22 +115,14 @@ Rate WindowRenderer::Monitor::getFrameRate() const {
  */
 struct WindowRendererImpl {
 	struct Open {
-		enum DescriptorLayouts {
-			DESCRIPTOR_LAYOUT_WINDOW,
-
-			DESCRIPTOR_LAYOUT_COUNT
-		};
-
 		const Graphics::Vulkan&						vulkan;
 
 		GLFW::Window								window;
 		vk::UniqueSurfaceKHR						surface;
 		vk::UniqueCommandPool						commandPool;
 		Graphics::CommandBuffer						commandBuffer;
-		RendererBase::UniformBufferLayout			uniformBufferLayout;
-		Graphics::StagedBuffer						uniformBuffer;
 		vk::UniqueDescriptorPool					descriptorPool;
-		vk::DescriptorSet							descriptorSet;
+		vk::DescriptorSet							uniformDescriptorSet;
 		vk::DescriptorSet							finalizationDescriptorSet;
 		vk::PipelineLayout							pipelineLayout;
 		vk::UniqueSemaphore 						imageAvailableSemaphore;
@@ -149,11 +142,7 @@ struct WindowRendererImpl {
 		Graphics::RenderPass						renderPass;
 		std::vector<Graphics::Framebuffer>			framebuffers;
 		std::vector<vk::ClearValue>					clearValues;
-
-		Math::Mat4x4f&								uniformProjectionMatrix;
-		Utils::BufferView<std::byte>				uniformOutputColorTransfer;
-		Utils::Area									uniformFlushArea;
-		vk::PipelineStageFlags						uniformFlushStages;
+		Graphics::UniformBuffer						uniformBuffer;
 
 
 		Open(	const Graphics::Vulkan& vulkan,
@@ -167,12 +156,10 @@ struct WindowRendererImpl {
 			, surface(window.getSurface(vulkan))
 			, commandPool(createCommandPool(vulkan))
 			, commandBuffer(createCommandBuffer(vulkan, *commandPool))
-			, uniformBufferLayout(RendererBase::getUniformBufferLayout(vulkan))
-			, uniformBuffer(createUniformBuffer(vulkan, uniformBufferLayout))
 			, descriptorPool(createDescriptorPool(vulkan))
-			, descriptorSet(createDescriptorSet(vulkan, *descriptorPool))
+			, uniformDescriptorSet(createUniformDescriptorSet(vulkan, *descriptorPool))
 			, finalizationDescriptorSet(createFinalizationDescriptorSet(vulkan, *descriptorPool))
-			, pipelineLayout(RendererBase::getPipelineLayout(vulkan))
+			, pipelineLayout(RendererBase::getBasePipelineLayout(vulkan))
 			, imageAvailableSemaphore(vulkan.createSemaphore())
 			, renderFinishedSemaphore(vulkan.createSemaphore())
 			, renderFinishedFence(vulkan.createFence(true))
@@ -190,11 +177,15 @@ struct WindowRendererImpl {
 			, renderPass()
 			, framebuffers()
 			, clearValues{vk::ClearColorValue()}
-
-			, uniformProjectionMatrix(getProjectionMatrix(uniformBufferLayout, uniformBuffer))
-			, uniformOutputColorTransfer(getOutputColorTransfer(uniformBufferLayout, uniformBuffer))
+			, uniformBuffer(vulkan, RendererBase::getUniformBufferSizes())
 		{
-			writeDescriptorSets();
+			constexpr std::pair<uint32_t, uint32_t> COLOR_TRANSFER_REMAPPING(
+				RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER,
+				Graphics::RenderPass::FINALIZATION_DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER
+			);
+
+			uniformBuffer.writeDescirptorSet(vulkan, uniformDescriptorSet);
+			uniformBuffer.writeDescirptorSet(vulkan, finalizationDescriptorSet, COLOR_TRANSFER_REMAPPING);
 			updateProjectionMatrixUniform(camera);
 			//updateOutputColorTransferUniform(); //No data
 		}
@@ -260,8 +251,8 @@ struct WindowRendererImpl {
 				modifications.set(RECREATE_SWAPCHAIN);
 			}
 
-			assert(uniformOutputColorTransfer.size() == ct.size());
-			if(std::memcmp(uniformOutputColorTransfer.data(), ct.data(), ct.size())) {
+			assert(uniformBuffer.getBindingData(RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER).size() == ct.size());
+			if(std::memcmp(uniformBuffer.getBindingData(RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER).data(), ct.data(), ct.size())) {
 				//Color transfer has changed
 				modifications.set(RECREATE_INTERMEDIATE_IMAGE);
 				modifications.set(UPDATE_OUTPUT_COLOR_TRANSFER);
@@ -305,7 +296,7 @@ struct WindowRendererImpl {
 						//Intermediate format has changed
 						if(extent != vk::Extent2D(0, 0) && intermediateFormat != vk::Format::eUndefined) {
 							intermediateImage = createIntermediateImage(vulkan, extent, intermediateFormat);
-							writeFinalizationDescriptorSets(*(intermediateImage->getPlanes().front().imageView));
+							Graphics::RenderPass::writeFinalizationDescriptorSet(vulkan, finalizationDescriptorSet, *intermediateImage);
 						} else {
 							intermediateImage.reset();
 						}
@@ -390,15 +381,7 @@ struct WindowRendererImpl {
 				//Ensure that everything is up to date
 				if(!renderer.getLayers().empty() || intermediateImage) {
 					//Flush the unform buffer
-					uniformBuffer.flushData(
-						vulkan,
-						uniformFlushArea,
-						vulkan.getGraphicsQueueIndex(),
-						vk::AccessFlagBits::eUniformRead,
-						uniformFlushStages
-					);
-					uniformFlushArea = {};
-					uniformFlushStages = {};
+					uniformBuffer.flush(vulkan);
 
 					//Set the dynamic viewport
 					const std::array viewports = {
@@ -423,13 +406,11 @@ struct WindowRendererImpl {
 
 				//Evaluate if there are any layers
 				if(!renderer.getLayers().empty()) {
-					assert(uniformFlushArea.size() == 0 && uniformFlushStages == vk::PipelineStageFlags());
-
 					commandBuffer.bindDescriptorSets(
 						vk::PipelineBindPoint::eGraphics,					//Pipeline bind point
 						pipelineLayout,										//Pipeline layout
-						DESCRIPTOR_LAYOUT_WINDOW,							//First index
-						descriptorSet,										//Descriptor sets
+						RendererBase::DESCRIPTOR_SET,						//First index
+						uniformDescriptorSet,								//Descriptor sets
 						{}													//Dynamic offsets
 					);
 
@@ -439,16 +420,7 @@ struct WindowRendererImpl {
 
 				//Finalize the renderpass if needed
 				if(intermediateImage) {
-					assert(uniformFlushArea.size() == 0 && uniformFlushStages == vk::PipelineStageFlags());
-
-					commandBuffer.bindDescriptorSets(
-						vk::PipelineBindPoint::eGraphics,							//Pipeline bind point
-						Graphics::RenderPass::getFinalizationPipelineLayout(vulkan),//Pipeline layout
-						DESCRIPTOR_LAYOUT_WINDOW,									//First index
-						finalizationDescriptorSet,									//Descriptor sets
-						{}															//Dynamic offsets
-					);
-					renderPass.finalize(vulkan, commandBuffer.get());
+					renderPass.finalize(vulkan, commandBuffer.get(), finalizationDescriptorSet);
 				}
 
 				//End everything
@@ -491,110 +463,24 @@ struct WindowRendererImpl {
 			uniformBuffer.waitCompletion(vulkan);
 
 			const auto size = Math::Vec2f(extent.width, extent.height);
-			uniformProjectionMatrix = cam.calculateMatrix(size);
-
-			uniformFlushArea |= uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_PROJECTION_MATRIX];
-			uniformFlushStages |= vk::PipelineStageFlagBits::eVertexShader;
+			const auto mtx = cam.calculateMatrix(size);
+			uniformBuffer.write(
+				vulkan,
+				RendererBase::DESCRIPTOR_BINDING_PROJECTION_MATRIX,
+				&mtx,
+				sizeof(mtx)
+			);
 		}
 
 		void updateOutputColorTransferUniform(const Graphics::OutputColorTransfer& outputColorTransfer) {
 			uniformBuffer.waitCompletion(vulkan);
 			
-			assert(outputColorTransfer.size() == uniformOutputColorTransfer.size());
-			std::memcpy(
-				uniformOutputColorTransfer.data(),
+			uniformBuffer.write(
+				vulkan,
+				RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER,
 				outputColorTransfer.data(),
-				uniformOutputColorTransfer.size()
+				outputColorTransfer.size()
 			);
-
-			uniformFlushArea |= uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER];
-			uniformFlushStages |= vk::PipelineStageFlagBits::eFragmentShader;
-		}
-	
-		void writeDescriptorSets() {
-			const std::array projectionMatrixBuffers = {
-				vk::DescriptorBufferInfo(
-					uniformBuffer.getBuffer(),															//Buffer
-					uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_PROJECTION_MATRIX].offset(),	//Offset
-					uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_PROJECTION_MATRIX].size()		//Size
-				)
-			};
-			const std::array colorTransferBuffers = {
-				vk::DescriptorBufferInfo(
-					uniformBuffer.getBuffer(),																//Buffer
-					uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER].offset(),	//Offset
-					uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER].size()		//Size
-				)
-			};
-
-			const std::array writeDescriptorSets = {
-				vk::WriteDescriptorSet( //Viewport UBO
-					descriptorSet,											//Descriptor set
-					RendererBase::DESCRIPTOR_BINDING_PROJECTION_MATRIX,		//Binding
-					0, 														//Index
-					projectionMatrixBuffers.size(),							//Descriptor count		
-					vk::DescriptorType::eUniformBuffer,						//Descriptor type
-					nullptr, 												//Images 
-					projectionMatrixBuffers.data(), 						//Buffers
-					nullptr													//Texel buffers
-				),
-				vk::WriteDescriptorSet( //ColorTransfer UBO
-					descriptorSet,											//Descriptor set
-					RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER,	//Binding
-					0, 														//Index
-					colorTransferBuffers.size(),							//Descriptor count		
-					vk::DescriptorType::eUniformBuffer,						//Descriptor type
-					nullptr, 												//Images 
-					colorTransferBuffers.data(), 							//Buffers
-					nullptr													//Texel buffers
-				)
-			};
-
-			vulkan.updateDescriptorSets(writeDescriptorSets, {});
-		}
-
-		void writeFinalizationDescriptorSets(vk::ImageView intermediateImageView) {
-			const std::array colorTransferBuffers = {
-				vk::DescriptorBufferInfo( //This buffer is shared with the other descriptor set, its indices are use to access offsets
-					uniformBuffer.getBuffer(),																//Buffer
-					uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER].offset(),	//Offset
-					uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER].size()		//Size
-				)
-			};
-
-			const std::array inputAttachment = {
-				vk::DescriptorImageInfo(
-					vk::Sampler(),											//Sampler
-					intermediateImageView,									//Image view
-					vk::ImageLayout::eShaderReadOnlyOptimal					//Image layout
-				)
-			};
-
-
-			const std::array writeDescriptorSets = {
-				vk::WriteDescriptorSet( //ColorTransfer UBO
-					finalizationDescriptorSet,								//Descriptor set
-					Graphics::RenderPass::FINALIZATION_DESCRIPTOR_BINDING_COLOR_TRANSFER, //Binding
-					0, 														//Index
-					colorTransferBuffers.size(),							//Descriptor count		
-					vk::DescriptorType::eUniformBuffer,						//Descriptor type
-					nullptr, 												//Images 
-					colorTransferBuffers.data(), 							//Buffers
-					nullptr													//Texel buffers
-				),
-				vk::WriteDescriptorSet( //Viewport UBO
-					finalizationDescriptorSet,								//Descriptor set
-					Graphics::RenderPass::FINALIZATION_DESCRIPTOR_BINDING_INPUT_ATTACHMENT, //Binding
-					0, 														//Index
-					inputAttachment.size(),									//Descriptor count		
-					vk::DescriptorType::eInputAttachment,					//Descriptor type
-					inputAttachment.data(), 								//Images 
-					nullptr, 												//Buffers
-					nullptr													//Texel buffers
-				),
-			};
-
-			vulkan.updateDescriptorSets(writeDescriptorSets, {});
 		}
 
 		size_t acquireImage() {
@@ -634,35 +520,18 @@ struct WindowRendererImpl {
 			);
 		}
 
-		static Graphics::StagedBuffer createUniformBuffer(	const Graphics::Vulkan& vulkan, 
-															const RendererBase::UniformBufferLayout& layout ) 
-		{
-			return Graphics::StagedBuffer(
-				vulkan,
-				vk::BufferUsageFlagBits::eUniformBuffer,
-				layout.back().end()
-			);
-		}
-
 		static vk::UniqueDescriptorPool createDescriptorPool(const Graphics::Vulkan& vulkan){
-			constexpr auto UNIFORM_BUFFER_COUNT = 
-				RendererBase::DESCRIPTOR_UNIFORM_BUFFER_COUNT +
-				Graphics::RenderPass::FINALIZATION_DESCRIPTOR_UNIFORM_BUFFER_COUNT ;
-
-			constexpr auto INPUT_ATTACHMENT_COUNT =
-				RendererBase::DESCRIPTOR_INPUT_ATTACHMENT_COUNT +
-				Graphics::RenderPass::FINALIZATION_DESCRIPTOR_INPUT_ATTACHMENT_COUNT ;
-
-			const std::array poolSizes = {
-				vk::DescriptorPoolSize(
-					vk::DescriptorType::eUniformBuffer,					//Descriptor type
-					UNIFORM_BUFFER_COUNT 								//Descriptor count
-				),
-				vk::DescriptorPoolSize(
-					vk::DescriptorType::eInputAttachment,				//Descriptor type
-					INPUT_ATTACHMENT_COUNT								//Descriptor count
-				),
-			};
+			std::vector<vk::DescriptorPoolSize> poolSizes;
+			poolSizes.insert(
+				poolSizes.cend(), 
+				RendererBase::getDescriptorPoolSizes().cbegin(),
+				RendererBase::getDescriptorPoolSizes().cend() 
+			);
+			poolSizes.insert(
+				poolSizes.cend(), 
+				Graphics::RenderPass::getFinalizationDescriptorPoolSizes().cbegin(),
+				Graphics::RenderPass::getFinalizationDescriptorPoolSizes().cend()
+			);
 
 			const vk::DescriptorPoolCreateInfo createInfo(
 				{},														//Flags
@@ -673,8 +542,8 @@ struct WindowRendererImpl {
 			return vulkan.createDescriptorPool(createInfo);
 		}
 
-		static vk::DescriptorSet createDescriptorSet(	const Graphics::Vulkan& vulkan,
-														vk::DescriptorPool pool )
+		static vk::DescriptorSet createUniformDescriptorSet(const Graphics::Vulkan& vulkan,
+															vk::DescriptorPool pool )
 		{
 			const auto layout = RendererBase::getDescriptorSetLayout(vulkan);
 			return vulkan.allocateDescriptorSet(pool, layout).release();
@@ -909,20 +778,6 @@ struct WindowRendererImpl {
 			};
 
 			return std::vector<uint32_t>(families.cbegin(), families.cend());
-		}
-
-		static Math::Mat4x4f& getProjectionMatrix(	const RendererBase::UniformBufferLayout& uniformBufferLayout,
-													Graphics::StagedBuffer& uniformBuffer )
-		{
-			const auto& area = uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_PROJECTION_MATRIX];
-			return *(reinterpret_cast<Math::Mat4x4f*>(area.begin(uniformBuffer.data())));
-		}
-
-		static Utils::BufferView<std::byte> getOutputColorTransfer(	const RendererBase::UniformBufferLayout& uniformBufferLayout,
-																	Graphics::StagedBuffer& uniformBuffer )
-		{
-			const auto& area = uniformBufferLayout[RendererBase::DESCRIPTOR_BINDING_OUTPUT_COLOR_TRANSFER];
-			return Utils::BufferView<std::byte>(area.begin(uniformBuffer.data()), area.size());
 		}
 	};
 
