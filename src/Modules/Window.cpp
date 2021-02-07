@@ -1,6 +1,6 @@
 #include <zuazo/Modules/Window.h>
 
-#include "../GLFW.h"
+#include "../GLFW/Instance.h"
 
 #include <zuazo/Utils/Functions.h>
 
@@ -13,49 +13,28 @@ std::unique_ptr<Window> Window::s_singleton;
 Window::Window() 
 	: Instance::Module(std::string(name), version)
 {
-	GLFW::initialize();
+	GLFW::Instance::initialize();
 }
 
 Window::~Window() {
-	assert(m_pollCallbacks.size() == 0);
-	GLFW::terminate();
+	GLFW::Instance::terminate();
 }
 
-
-
-void Window::initialize(Instance& instance) const {
-	const auto[ite, result] = m_pollCallbacks.emplace(
-		&instance, 
-		Utils::makeShared<Instance::ScheduledCallback>(std::bind(&Window::pollCallback, std::ref(instance)))
-	);
-	assert(result);
-
-	//This callback must be the last one, as it unlocks the instance, which might be dangerous
-	instance.addRegularCallback(ite->second, Instance::LOWEST_PRIORITY);
-}
-
-void Window::terminate(Instance& instance) const {
-	const auto ite = m_pollCallbacks.find(&instance);
-	assert(ite != m_pollCallbacks.end());
-
-	instance.removeRegularCallback(ite->second);
-	m_pollCallbacks.erase(ite);
-}
 
 
 Window::VulkanExtensions Window::getRequiredVulkanInstanceExtensions() const {
-	return GLFW::getRequiredVulkanInstanceExtensions();
+	return GLFW::Instance::get().getRequiredVulkanInstanceExtensions();
 }
 
 Window::VulkanExtensions Window::getRequiredVulkanDeviceExtensions() const {
-	return GLFW::getRequiredVulkanDeviceExtensions();
+	return GLFW::Instance::get().getRequiredVulkanDeviceExtensions();
 }
 
 bool Window::getPresentationSupport(vk::Instance  instance, 
 									vk::PhysicalDevice device, 
 									uint32_t queueIndex ) const 
 {
-	return GLFW::getPresentationSupport(instance, device, queueIndex);
+	return GLFW::Instance::get().getPresentationSupport(instance, device, queueIndex);
 }
 
 
@@ -67,15 +46,6 @@ const Window& Window::get() {
 
 	assert(s_singleton);
 	return *s_singleton;
-}
-
-
-
-void Window::pollCallback(Instance& instance) {
-	//As it is being called from the loop, instance should be locked by this thread
-	instance.unlock();
-	GLFW::getGLFW().pollEvents();
-	instance.lock();
 }
 
 }

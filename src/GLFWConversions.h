@@ -1,22 +1,22 @@
 #pragma once
 
-#include "GLFW.h"
+#include "GLFW/Instance.h"
 
 #include <zuazo/Keyboard.h>
 
 namespace Zuazo {
 
-constexpr GLFW::Window::KeyboardKey toGLFW(KeyboardKey key);
-constexpr KeyboardKey fromGLFW(GLFW::Window::KeyboardKey key);
+constexpr GLFW::KeyboardKey toGLFW(KeyboardKey key);
+constexpr KeyboardKey fromGLFW(GLFW::KeyboardKey key);
 
-constexpr GLFW::Window::MouseButton toGLFW(MouseKey key);
-constexpr MouseKey fromGLFW(GLFW::Window::MouseButton key);
+constexpr GLFW::MouseButton toGLFW(MouseKey key);
+constexpr MouseKey fromGLFW(GLFW::MouseButton key);
 
-constexpr GLFW::Window::KeyboardModifiers toGLFW(KeyModifiers modifiers);
-constexpr KeyModifiers fromGLFW(GLFW::Window::KeyboardModifiers modifiers);
+constexpr GLFW::KeyModifiers toGLFW(KeyModifiers modifiers);
+constexpr KeyModifiers fromGLFW(GLFW::KeyModifiers modifiers);
 
-constexpr GLFW::Window::KeyboardEvent toGLFW(KeyEvent event);
-constexpr KeyEvent fromGLFW(GLFW::Window::KeyboardEvent event);
+constexpr GLFW::KeyEvent toGLFW(KeyEvent event);
+constexpr KeyEvent fromGLFW(GLFW::KeyEvent event);
 
 }
 

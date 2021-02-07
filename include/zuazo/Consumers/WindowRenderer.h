@@ -9,6 +9,7 @@
 #include <zuazo/Keyboard.h>
 #include <zuazo/Math/Vector.h>
 #include <zuazo/Utils/Pimpl.h>
+#include <zuazo/Utils/BufferView.h>
 #include <zuazo/Signal/ConsumerLayout.h>
 
 #include <tuple>
@@ -25,21 +26,42 @@ class WindowRenderer final
 {
 	friend WindowRendererImpl;
 public:
-	class Monitor;
 
-	enum class State {
-		NORMAL,
-		HIDDEN,
-		FULLSCREEN,
-		ICONIFIED,
-		MAXIMIZED
+	class Monitor {
+	public:
+		struct Mode {
+			Math::Vec2i	size;
+			Math::Vec3i colorDepth;
+			int			frameRate;
+		};
+
+		Monitor();
+		Monitor(const Monitor& other);
+		~Monitor();
+
+		Monitor&						operator=(const Monitor& other);
+
+		bool							operator==(const Monitor& other) const noexcept;
+		bool							operator!=(const Monitor& other) const noexcept;
+
+		std::string_view				getName() const;
+		Math::Vec2d						getPhysicalSize() const;
+		Math::Vec2i						getPosition() const;
+		const Mode&						getMode() const;
+		Utils::BufferView<const Mode>	getModes() const;
+
+	private:
+		void*							m_handle;
+
 	};
+
 
 	using SizeCallback = std::function<void(WindowRenderer&, Math::Vec2i)>;
 	using PositionCallback = std::function<void(WindowRenderer&, Math::Vec2i)>;
-	using StateCallback = std::function<void(WindowRenderer&, State)>;
-	using ScaleCallback = std::function<void(WindowRenderer&, Math::Vec2f)>;
+	using IconifyCallback = std::function<void(WindowRenderer&, bool)>;
+	using MaximizeCallback = std::function<void(WindowRenderer&, bool)>;
 	using FocusCallback = std::function<void(WindowRenderer&, bool)>;
+	using ScaleCallback = std::function<void(WindowRenderer&, Math::Vec2f)>;
 	using ShouldCloseCallback = std::function<void(WindowRenderer&)>;
 	using KeyboardCallback = std::function<void(WindowRenderer&, KeyboardKey, KeyEvent, KeyModifiers)>;
 	using CharacterCallback = std::function<void(WindowRenderer&, uint)>;
@@ -48,12 +70,14 @@ public:
 	using MouseScrollCallback = std::function<void(WindowRenderer&, Math::Vec2d)>;
 	using CursorEnterCallback = std::function<void(WindowRenderer&, bool)>;
 
+
 	struct Callbacks {
 		SizeCallback				sizeCbk;
 		PositionCallback			positionCbk;
-		StateCallback				stateCbk;
-		ScaleCallback				scaleCbk;
+		IconifyCallback				iconifyCbk;
+		MaximizeCallback			maximizeCbk;
 		FocusCallback				focusCbk;
+		ScaleCallback				scaleCbk;
 		ShouldCloseCallback			shouldCloseCbk;
 		KeyboardCallback			keyboardCbk;
 		CharacterCallback			characterCbk;
@@ -62,6 +86,8 @@ public:
 		MouseScrollCallback			mouseScrollCbk;
 		CursorEnterCallback			cursorEnterCbk;
 	};
+
+
 
 	WindowRenderer(	Instance& instance, 
 					std::string name,
@@ -77,8 +103,8 @@ public:
 	WindowRenderer&				operator=(const WindowRenderer& other) = delete;
 	WindowRenderer&				operator=(WindowRenderer&& other);
 
-	void						setWindowName(std::string name);
-	const std::string&			getWindowName() const;
+	void						setTitle(std::string name);
+	const std::string&			getTitle() const;
 
 	void						setSize(Math::Vec2i size);
 	Math::Vec2i					getSize() const;
@@ -90,18 +116,9 @@ public:
 	void						setPositionCallback(PositionCallback cbk);
 	const PositionCallback&		getPositionCallback() const;
 
-	void						setState(State state);
-	State						getState() const;
-	void						setStateCallback(StateCallback cbk);
-	const StateCallback&		getStateCallback() const;
-
 	Math::Vec2f					getScale() const;
 	void						setScaleCallback(ScaleCallback cbk);
 	const ScaleCallback&		getScaleCallback() const;
-
-	void						focus();
-	void						setFocusCallback(FocusCallback cbk);
-	const FocusCallback&		getFocusCallback() const;
 
 	bool						shouldClose() const;
 	void						setShouldCloseCallback(ShouldCloseCallback cbk);
@@ -116,7 +133,27 @@ public:
 	void						setDecorated(bool deco);
 	bool						getDecorated() const;
 
-	void						setMonitor(const Monitor& mon);
+	void						setVisibility(bool visibility);
+	bool						getVisibility() const;
+
+	void						iconify();
+	bool						isIconified() const;
+	void						setIconifyCallback(IconifyCallback cbk);
+	const IconifyCallback&		getIconifyCallback() const;
+
+	void						maximize();
+	bool						isMaximized() const;
+	void						setMaximizeCallback(MaximizeCallback cbk);
+	const MaximizeCallback&		getMaximizeCallback() const;
+
+	void 						focus();
+	bool						isFocused() const;
+	void						setFocusCallback(FocusCallback cbk);
+	const FocusCallback&		getFocusCallback() const;
+
+	void						restore();
+
+	void						setMonitor(const Monitor& mon, const Monitor::Mode* mode);
 	Monitor						getMonitor() const;
 
 
@@ -141,36 +178,10 @@ public:
 	void						setCursorEnterCallback(CursorEnterCallback cbk);
 	const CursorEnterCallback& 	getCursorEnterCallback() const;
 
-	static const Monitor		NO_MONITOR;
+	static Monitor							getPrimaryMonitor();
+	static Utils::BufferView<const Monitor>	getMonitors();
 
-	static Monitor				getPrimaryMonitor();
-	static std::vector<Monitor>	getMonitors();
-
-};
-
-
-class WindowRenderer::Monitor {
-	friend WindowRendererImpl;
-public:
-	Monitor();
-	Monitor(const Monitor& other) = delete;
-	Monitor(Monitor&& other);
-	~Monitor();
-
-	Monitor&					operator=(const Monitor& other) = delete;
-	Monitor&					operator=(Monitor&& other);
-
-	std::string_view			getName() const;
-	Math::Vec2d					getPhysicalSize() const;
-	Math::Vec2i					getSize() const;
-	Math::Vec2i					getPosition() const;
-	Rate						getFrameRate() const;
-
-private:
-	struct Impl;
-	Utils::Pimpl<Impl>			m_impl;
-
-	Monitor(Utils::Pimpl<Impl> pimpl);
+	static const Monitor					NO_MONITOR;
 
 };
 

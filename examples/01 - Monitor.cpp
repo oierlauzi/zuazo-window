@@ -115,12 +115,32 @@ int main(int argc, const char* argv[]) {
 	std::cin >> monitorSelection;
 	lock.lock();
 
-	//Check if the selection is valid and set fullscreen
+	//Check if the selection is valid
 	if(monitorSelection < monitors.size()) {
-		window.setMonitor(monitors[monitorSelection]);
-		videoSurface.setSize(window.getVideoMode().getResolutionValue());
+		//Display available modes
+		const auto modes = monitors[monitorSelection].getModes();
+
+		std::cout << "Available modes:\n";
+		for(const auto& mode : modes) {
+			std::cout << "-\t" << mode.size.x << "x" << mode.size.y << "@" << mode.frameRate << "Hz" << "\n";
+		}
+
+		//Ask the user to select a mode for the monitor
+		size_t modeSelection;
+		std::cout << "Select mode: ";
+		lock.unlock();
+		std::cin >> modeSelection;
+		lock.lock();
+
+		//Check if the selection is valid
+		if(modeSelection < modes.size()) {
+			window.setMonitor(monitors[monitorSelection], &modes[modeSelection]);
+			videoSurface.setSize(window.getVideoMode().getResolutionValue());
+		} else {
+			std::cout << "Invalid mode" << std::endl;
+		}
 	} else {
-		std::cerr << "Invalid monitor" << std::endl;
+		std::cout << "Invalid monitor" << std::endl;
 	}
 
 	//Wait for 10
@@ -129,7 +149,7 @@ int main(int argc, const char* argv[]) {
 	lock.lock();
 
 	//Unset the fullscreen
-	window.setMonitor(Zuazo::Consumers::WindowRenderer::NO_MONITOR);
+	window.setMonitor(Zuazo::Consumers::WindowRenderer::NO_MONITOR, nullptr);
 	videoSurface.setSize(window.getVideoMode().getResolutionValue());
 
 	//Done!

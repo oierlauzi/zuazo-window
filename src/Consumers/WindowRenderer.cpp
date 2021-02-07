@@ -1,6 +1,6 @@
 #include <zuazo/Consumers/WindowRenderer.h>
 
-#include "../GLFW.h"
+#include "../GLFW/Window.h"
 #include "../GLFWConversions.h"
 
 #include <zuazo/Graphics/Vulkan.h>
@@ -27,92 +27,9 @@
 namespace Zuazo::Consumers {
 
 /*
- * Window::Monitor::Impl
- */
-
-struct WindowRenderer::Monitor::Impl {
-	GLFW::Monitor monitor;
-
-	Impl()
-		: monitor(nullptr)
-	{
-	}
-
-	Impl(GLFW::Monitor mon)
-		: monitor(std::move(mon))
-	{
-	}
-
-	~Impl() = default;
-
-	std::string_view getName() const {
-		return monitor.getName();
-	}
-
-	Math::Vec2d getPhysicalSize() const {
-		return monitor.getPhysicalSize();
-	}
-
-	Math::Vec2i getSize() const {
-		return monitor.getSize();
-	}
-
-	Math::Vec2i getPosition() const {
-		return monitor.getPosition();
-	}
-
-	Rate getFrameRate() const {
-		return Rate(monitor.getFrameRate(), 1);
-	}
-
-};
-
-/*
- * Window::Monitor
- */
-
-WindowRenderer::Monitor::Monitor()
-	: m_impl({})
-{
-}
-
-WindowRenderer::Monitor::Monitor(Utils::Pimpl<Impl> pimpl)
-	: m_impl(std::move(pimpl))
-{
-}
-
-WindowRenderer::Monitor::Monitor(Monitor&& other) = default;
-
-WindowRenderer::Monitor::~Monitor() = default;
-
-WindowRenderer::Monitor& WindowRenderer::Monitor::operator=(Monitor&& other) = default;
-
-
-
-std::string_view WindowRenderer::Monitor::getName() const {
-	return m_impl->getName();
-}
-
-Math::Vec2d WindowRenderer::Monitor::getPhysicalSize() const {
-	return m_impl->getPhysicalSize();
-}
-
-Math::Vec2i WindowRenderer::Monitor::getSize() const {
-	return m_impl->getSize();
-}
-
-Math::Vec2i WindowRenderer::Monitor::getPosition() const {
-	return m_impl->getPosition();
-}
-
-Rate WindowRenderer::Monitor::getFrameRate() const {
-	return m_impl->getFrameRate();
-}
-
-
-/*
  * WindowRendererImpl
  */
+
 struct WindowRendererImpl {
 	struct Open {
 		const Graphics::Vulkan&						vulkan;
@@ -147,13 +64,13 @@ struct WindowRendererImpl {
 
 		Open(	const Graphics::Vulkan& vulkan,
 				Math::Vec2i size,
-				const char* name,
-				GLFW::Monitor mon,
-				GLFW::Window::Callbacks cbks,
+				const std::string& title,
+				WindowRenderer::Monitor monitor,
+				WindowRendererImpl& impl,
 				const WindowRenderer::Camera& camera ) 
 			: vulkan(vulkan)
-			, window(size, name, mon, std::move(cbks))
-			, surface(window.getSurface(vulkan))
+			, window(createWindow(size, title, monitor, impl))
+			, surface(createSurface(vulkan, window))
 			, commandPool(createCommandPool(vulkan))
 			, commandBuffer(createCommandBuffer(vulkan, *commandPool))
 			, descriptorPool(createDescriptorPool(vulkan))
@@ -497,8 +414,57 @@ struct WindowRendererImpl {
 			return (result == vk::Result::eSuccess) || (result == vk::Result::eSuboptimalKHR) ? index : framebuffers.size();
 		}
 
-		static vk::UniqueCommandPool createCommandPool(const Graphics::Vulkan& vulkan)
+
+		
+		static GLFW::Window createWindow(	Math::Vec2i size, 
+											const std::string& title,
+											WindowRenderer::Monitor monitor,
+											WindowRendererImpl& impl )
 		{
+			const GLFW::WindowCallbacks callbacks = {
+				windowPositionCallback,
+				windowSizeCallback,
+				windowCloseCallback,
+				windowRefreshCallback,
+				windowFocusCallback,
+				windowIconifyCallback,
+				windowMaximizeCallback,
+				windowResolutionCallback,
+				windowScaleCallback,
+				windowKeyCallback,
+				windowCharCallback,
+				windowMousePositionCallback,
+				windowMouseEnterCallback,
+				windowMouseButtonCallback,
+				windowMouseScrollCallback
+			};
+
+			return GLFW::Window(
+				size, 
+				title.c_str(), 
+				reinterpret_cast<const GLFW::Monitor&>(monitor), 
+				callbacks, 
+				&impl
+			);
+		}
+
+		static vk::UniqueSurfaceKHR createSurface(	const Graphics::Vulkan& vulkan,
+													const GLFW::Window& window )
+		{
+			auto surface = window.createSurface(vulkan.getInstance());
+
+			if(!surface) {
+				throw Exception("Unable to create a surface for the window");
+			}
+
+			using Deleter = vk::UniqueHandleTraits<vk::SurfaceKHR, vk::DispatchLoaderDynamic>::deleter;
+			return vk::UniqueSurfaceKHR(
+				surface,
+				Deleter(vulkan.getInstance(), nullptr, vulkan.getDispatcher())
+			);
+		}
+
+		static vk::UniqueCommandPool createCommandPool(const Graphics::Vulkan& vulkan) {
 			constexpr auto createFlags = 
 				vk::CommandPoolCreateFlagBits::eTransient | 		//Re-recorded often
 				vk::CommandPoolCreateFlagBits::eResetCommandBuffer;	//Re-recorded individually
@@ -783,14 +749,14 @@ struct WindowRendererImpl {
 
 	std::reference_wrapper<WindowRenderer>		owner;
 
-	std::string									windowName;
+	std::string									title;
 	Math::Vec2i 								size;
 	Math::Vec2i 								position;
-	WindowRenderer::State 						state;
 	float										opacity;
 	bool										resizeable;
 	bool										decorated;
-	GLFW::Monitor								monitor;
+	bool										visible;
+	WindowRenderer::Monitor						monitor;
 
 	WindowRenderer::Callbacks					callbacks;
 	
@@ -807,14 +773,13 @@ struct WindowRendererImpl {
 				const WindowRenderer::Monitor& mon,
 				WindowRenderer::Callbacks callbacks)
 		: owner(owner)
-		, windowName(instance.getApplicationInfo().getName())
+		, title(instance.getApplicationInfo().getName())
 		, size(size)
 		, position(NO_POSTION)
-		, state(WindowRenderer::State::NORMAL)
 		, opacity(1.0f)
 		, resizeable(true)
 		, decorated(true)
-		, monitor(getGLFWMonitor(mon))
+		, monitor(mon)
 		, callbacks(std::move(callbacks))
 	{
 	}
@@ -917,7 +882,7 @@ struct WindowRendererImpl {
 
 		if(opened) {
 			//Select a monitor to depend on
-			const auto& mon = monitor ? monitor : GLFW::getGLFW().getPrimaryMonitor();
+			const auto& mon = (monitor != WindowRenderer::Monitor()) ? monitor : WindowRenderer::getPrimaryMonitor();
 
 			//Construct a base capability struct which will be common to all compatibilities
 			const VideoMode baseCompatibility(
@@ -991,15 +956,15 @@ struct WindowRendererImpl {
 		return result;
 	}
 
-	void setWindowName(std::string name) {
-		if(windowName != name) {
-			windowName = std::move(name);
-			if(opened) opened->window.setName(windowName.c_str());
+	void setTitle(std::string name) {
+		if(title != name) {
+			title = std::move(name);
+			if(opened) opened->window.setTitle(title.c_str());
 		}
 	}
 
-	const std::string& getWindowName() const {
-		return windowName;
+	const std::string& getTitle() const {
+		return title;
 	}
 
 
@@ -1046,26 +1011,6 @@ struct WindowRendererImpl {
 	}
 
 
-	void setState(WindowRenderer::State st) {
-		if(state != st) {
-			state = st;
-			if(opened) opened->window.setState(static_cast<GLFW::Window::State>(state));
-		}
-	}
-
-	WindowRenderer::State getState() const {
-		return state;
-	}
-
-	void setStateCallback(WindowRenderer::StateCallback cbk) {
-		callbacks.stateCbk = std::move(cbk);
-	}
-
-	const WindowRenderer::StateCallback& getStateCallback() const {
-		return callbacks.stateCbk;
-	}
-
-
 	Math::Vec2f getScale() const {
 		return opened ? opened->window.getScale() : Math::Vec2f(0.0f);
 	}
@@ -1076,19 +1021,6 @@ struct WindowRendererImpl {
 
 	const WindowRenderer::ScaleCallback& getScaleCallback() const {
 		return callbacks.scaleCbk;
-	}
-
-
-	void focus() {
-		if(opened) opened->window.focus();
-	}
-
-	void setFocusCallback(WindowRenderer::FocusCallback cbk) {
-		callbacks.focusCbk = std::move(cbk);
-	}
-
-	const WindowRenderer::FocusCallback& getFocusCallback() const {
-		return callbacks.focusCbk;
 	}
 
 
@@ -1134,18 +1066,85 @@ struct WindowRendererImpl {
 		return decorated;
 	}
 
-	void setMonitor(const WindowRenderer::Monitor& mon) {
-		monitor = getGLFWMonitor(mon);
+
+	void setVisibility(bool visibility) {
+		visible = visibility;
+		if(opened) opened->window.setVisibility(visibility);
+	}
+
+	bool getVisibility() const {
+		return visible;
+	}
+	
+
+	void iconify() {
+		if(opened) opened->window.iconify();
+	}
+
+	bool isIconified() const {
+		return opened ? opened->window.isIconified() : false;
+	}
+
+	void setIconifyCallback(WindowRenderer::IconifyCallback cbk) {
+		callbacks.iconifyCbk = std::move(cbk);
+	}
+
+	const WindowRenderer::IconifyCallback& getIconifyCallback() const {
+		return callbacks.iconifyCbk;
+	}
+
+
+	void maximize() {
+		if(opened) opened->window.maximize();
+	}
+
+	bool isMaximized() const {
+		return opened ? opened->window.isMaximized() : false;
+	}
+
+	void setMaximizeCallback(WindowRenderer::MaximizeCallback cbk) {
+		callbacks.maximizeCbk = std::move(cbk);
+	}
+
+	const WindowRenderer::MaximizeCallback& getMaximizeCallback() const {
+		return callbacks.maximizeCbk;
+	}
+
+
+	void focus() {
+		if(opened) opened->window.focus();
+	}
+
+	void setFocusCallback(WindowRenderer::FocusCallback cbk) {
+		callbacks.focusCbk = std::move(cbk);
+	}
+
+	const WindowRenderer::FocusCallback& getFocusCallback() const {
+		return callbacks.focusCbk;
+	}
+
+
+	void restore() {
+		if(opened) opened->window.restore();
+	}
+
+
+	void setMonitor(const WindowRenderer::Monitor& mon, const WindowRenderer::Monitor::Mode* mode) {
+		monitor = mon;
 
 		if(opened) {
-			opened->window.setMonitor(monitor);
+			opened->window.setMonitor(
+				reinterpret_cast<const GLFW::Monitor&>(monitor), 
+				reinterpret_cast<const GLFW::VideoMode*>(mode)
+			);
+
 			size = opened->window.getSize();
 			owner.get().setVideoModeCompatibility(getVideoModeCompatibility()); //This will call reconfigure if resizeing is needed
 		}
 	}
 	
 	WindowRenderer::Monitor getMonitor() const {
-		return constructMonitor(monitor);
+		return monitor;
 	}
 
 
@@ -1224,19 +1223,16 @@ struct WindowRendererImpl {
 
 
 	static WindowRenderer::Monitor getPrimaryMonitor() {
-		return WindowRendererImpl::constructMonitor(GLFW::getGLFW().getPrimaryMonitor());
+		const auto monitor = GLFW::Monitor::getPrimaryMonitor();
+		return reinterpret_cast<const WindowRenderer::Monitor&>(monitor);
 	}
 
-	static std::vector<WindowRenderer::Monitor> getMonitors() {
-		const auto monitors = GLFW::getGLFW().getMonitors();
-		std::vector<WindowRenderer::Monitor> result;
-		result.reserve(monitors.size());
-
-		for(const auto& mon : monitors) {
-			result.push_back(constructMonitor(mon));
-		}
-
-		return result;
+	static Utils::BufferView<const WindowRenderer::Monitor> getMonitors() {
+		const auto monitors = GLFW::Monitor::getMonitors();
+		return Utils::BufferView<const WindowRenderer::Monitor>(
+			reinterpret_cast<const WindowRenderer::Monitor*>(monitors.data()),
+			monitors.size()
+		);
 	}
 
 private:
@@ -1247,9 +1243,9 @@ private:
 		opened = std::make_unique<Open>(
 			window.getInstance().getVulkan(),
 			size,
-			windowName.c_str(),
+			title,
 			monitor,
-			createCallbacks(),
+			*this,
 			window.getCamera()
 		);
 		
@@ -1257,10 +1253,10 @@ private:
 		//opened->window.setName(windowName); //Already set when constructing
 		//opened->window.setSize(size); //Already set when constructing
 		if(position != NO_POSTION) opened->window.setPosition(position);
-		opened->window.setState(static_cast<GLFW::Window::State>(state));
 		opened->window.setOpacity(opacity);
 		opened->window.setResizeable(resizeable);
 		opened->window.setDecorated(decorated);
+		opened->window.setVisibility(visible);
 	}
 
 	void doClose() {
@@ -1308,144 +1304,6 @@ private:
 		}
 	}
 
-	GLFW::Window::Callbacks createCallbacks() {
-		return {
-			std::bind(&WindowRendererImpl::stateCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&WindowRendererImpl::positionCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&WindowRendererImpl::sizeCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&WindowRendererImpl::resolutionCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&WindowRendererImpl::scaleCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&WindowRendererImpl::shouldCloseCallback, std::ref(*this)),
-			GLFW::Window::RefreshCallback(),
-			std::bind(&WindowRendererImpl::focusCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&WindowRendererImpl::keyboardCallback, std::ref(*this), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
-			std::bind(&WindowRendererImpl::characterCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&WindowRendererImpl::mouseButtonCallback, std::ref(*this), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
-			std::bind(&WindowRendererImpl::mousePositionCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&WindowRendererImpl::mouseScrollCallback, std::ref(*this), std::placeholders::_1),
-			std::bind(&WindowRendererImpl::cursorEnterCallback, std::ref(*this), std::placeholders::_1)
-		};
-	}
-
-	void resolutionCallback(Resolution) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-		owner.get().setVideoModeCompatibility(getVideoModeCompatibility()); //This will call reconfigure if resizeing is needed
-	}
-
-	void sizeCallback(Math::Vec2i s) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		size = s;
-		Utils::invokeIf(callbacks.sizeCbk, win, size);
-	}
-
-	void positionCallback(Math::Vec2i pos) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		position = pos;
-		Utils::invokeIf(callbacks.positionCbk, win, position);
-	}
-
-	void stateCallback(GLFW::Window::State st) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		state = static_cast<WindowRenderer::State>(st);
-		Utils::invokeIf(callbacks.stateCbk, win, state);
-	}
-
-	void scaleCallback(Math::Vec2f sc) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		Utils::invokeIf(callbacks.scaleCbk, win, sc);
-	}
-
-	void focusCallback(bool foc) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		Utils::invokeIf(callbacks.focusCbk, win, foc);
-	}
-
-	void shouldCloseCallback() {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		Utils::invokeIf(callbacks.shouldCloseCbk, win);
-	}
-
-	void keyboardCallback(GLFW::Window::KeyboardKey key, GLFW::Window::KeyboardEvent event, GLFW::Window::KeyboardModifiers mod) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		Utils::invokeIf(
-			callbacks.keyboardCbk, 
-			win, 
-			fromGLFW(key),
-			fromGLFW(event),
-			fromGLFW(mod)
-		);
-	}
-
-	void characterCallback(uint character) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		Utils::invokeIf(callbacks.characterCbk, win, character);
-	}
-
-	void mouseButtonCallback(GLFW::Window::MouseButton button, GLFW::Window::KeyboardEvent event, GLFW::Window::KeyboardModifiers mod) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		Utils::invokeIf(
-			callbacks.mouseButtonCbk, 
-			win, 
-			fromGLFW(button),
-			fromGLFW(event),
-			fromGLFW(mod)
-		);
-	}
-
-	void mousePositionCallback(Math::Vec2d pos) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		Utils::invokeIf(callbacks.mousePositionCbk, win, pos);
-	}
-
-	void mouseScrollCallback(Math::Vec2d deltaScroll) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		Utils::invokeIf(callbacks.mouseScrollCbk, win, deltaScroll);
-	}
-
-	void cursorEnterCallback(bool entered) {
-		assert(opened);
-		auto& win = owner.get();
-		std::lock_guard<Instance> lock(win.getInstance());
-
-		Utils::invokeIf(callbacks.cursorEnterCbk, win, entered);
-	}
-
-
 
 	static std::tuple<vk::Extent2D, vk::Format, vk::ColorSpaceKHR, Graphics::OutputColorTransfer>
 	convertParameters(	const Graphics::Vulkan& vulkan,
@@ -1481,13 +1339,96 @@ private:
 		);
 	}
 
-	static WindowRenderer::Monitor constructMonitor(GLFW::Monitor mon) {
-		return WindowRenderer::Monitor(Utils::Pimpl<WindowRenderer::Monitor::Impl>({}, std::move(mon)));
+
+	static WindowRendererImpl& getUserPointer(GLFW::WindowHandle win) {
+		GLFW::Instance::get().getUserPointer(win);
 	}
 
-	static GLFW::Monitor getGLFWMonitor(const WindowRenderer::Monitor& mon) {
-		return mon.m_impl->monitor;
+	static void windowPositionCallback(GLFW::WindowHandle win, int x, int y) {
+		const auto& impl = getUserPointer(win);
+
 	}
+
+	static void windowSizeCallback(GLFW::WindowHandle win, int x, int y) {
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowCloseCallback(GLFW::WindowHandle win) {
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowRefreshCallback(GLFW::WindowHandle win) {
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowFocusCallback(GLFW::WindowHandle win, int focus) {
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowIconifyCallback(GLFW::WindowHandle win, int iconify) {
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowMaximizeCallback(GLFW::WindowHandle win, int maximized) {
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowResolutionCallback(GLFW::WindowHandle win, int x, int y) {
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowScaleCallback(GLFW::WindowHandle win, float x, float y) {
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowKeyCallback(	GLFW::WindowHandle win, 
+									GLFW::KeyboardKey key, 
+									int scancode, 
+									GLFW::KeyEvent event, 
+									GLFW::KeyModifiers modifiers)
+	{
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowCharCallback(GLFW::WindowHandle win, unsigned int character) {
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowMousePositionCallback(GLFW::WindowHandle win, double x, double y) {
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowMouseEnterCallback(GLFW::WindowHandle win, int entered) {
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowMouseButtonCallback(	GLFW::WindowHandle win, 
+											GLFW::MouseButton but,
+											GLFW::KeyEvent event, 
+											GLFW::KeyModifiers modifiers) 
+	{
+		const auto& impl = getUserPointer(win);
+
+	}
+
+	static void windowMouseScrollCallback(GLFW::WindowHandle win, double x, double y) {
+		const auto& impl = getUserPointer(win);
+		
+	}
+
+
 };
 
 
@@ -1535,11 +1476,11 @@ WindowRenderer::~WindowRenderer() = default;
 WindowRenderer& WindowRenderer::operator=(WindowRenderer&& other) = default;
 
 
-void WindowRenderer::setWindowName(std::string name) {
-	(*this)->setWindowName(std::move(name));
+void WindowRenderer::setTitle(std::string name) {
+	(*this)->setTitle(std::move(name));
 }
-const std::string& WindowRenderer::getWindowName() const {
-	return (*this)->getWindowName();
+const std::string& WindowRenderer::getTitle() const {
+	return (*this)->getTitle();
 }
 
 
@@ -1577,23 +1518,6 @@ const WindowRenderer::PositionCallback&	WindowRenderer::getPositionCallback() co
 }
 
 
-void WindowRenderer::setState(State state) {
-	(*this)->setState(state);
-}
-
-WindowRenderer::State WindowRenderer::getState() const {
-	return (*this)->getState();
-}
-
-void WindowRenderer::setStateCallback(StateCallback cbk) {
-	(*this)->setStateCallback(std::move(cbk));
-}
-
-const WindowRenderer::StateCallback& WindowRenderer::getStateCallback() const {
-	return (*this)->getStateCallback();
-}
-
-
 Math::Vec2f WindowRenderer::getScale() const {
 	return (*this)->getScale();
 }
@@ -1604,19 +1528,6 @@ void WindowRenderer::setScaleCallback(ScaleCallback cbk) {
 
 const WindowRenderer::ScaleCallback& WindowRenderer::getScaleCallback() const {
 	return (*this)->getScaleCallback();
-}
-
-
-void WindowRenderer::focus() {
-	(*this)->focus();
-}
-
-void WindowRenderer::setFocusCallback(FocusCallback cbk) {
-	(*this)->setFocusCallback(std::move(cbk));
-}
-
-const WindowRenderer::FocusCallback& WindowRenderer::getFocusCallback() const {
-	return (*this)->getFocusCallback();
 }
 
 
@@ -1660,8 +1571,69 @@ bool WindowRenderer::getDecorated() const {
 }
 
 
-void WindowRenderer::setMonitor(const Monitor& mon) {
-	(*this)->setMonitor(mon);
+void WindowRenderer::setVisibility(bool visibility) {
+	(*this)->setVisibility(visibility);
+}
+
+bool WindowRenderer::getVisibility() const {
+	return (*this)->getVisibility();
+}
+
+
+void WindowRenderer::iconify() {
+	(*this)->iconify();
+}
+
+bool WindowRenderer::isIconified() const {
+	return (*this)->isIconified();
+}
+
+void WindowRenderer::setIconifyCallback(IconifyCallback cbk) {
+	(*this)->setIconifyCallback(std::move(cbk));
+}
+
+const WindowRenderer::IconifyCallback& WindowRenderer::getIconifyCallback() const {
+	return (*this)->getIconifyCallback();
+}
+
+
+void WindowRenderer::maximize() {
+	(*this)->maximize();
+}
+
+bool WindowRenderer::isMaximized() const {
+	return (*this)->isMaximized();
+}
+
+void WindowRenderer::setMaximizeCallback(MaximizeCallback cbk) {
+	(*this)->setMaximizeCallback(std::move(cbk));
+}
+
+const WindowRenderer::MaximizeCallback& WindowRenderer::getMaximizeCallback() const {
+	return (*this)->getMaximizeCallback();
+}
+
+
+void WindowRenderer::focus() {
+	(*this)->focus();
+}
+
+void WindowRenderer::setFocusCallback(FocusCallback cbk) {
+	(*this)->setFocusCallback(std::move(cbk));
+}
+
+const WindowRenderer::FocusCallback& WindowRenderer::getFocusCallback() const {
+	return (*this)->getFocusCallback();
+}
+
+
+void WindowRenderer::restore() {
+	(*this)->restore();
+}
+
+
+void WindowRenderer::setMonitor(const Monitor& mon, const Monitor::Mode* mode) {
+	(*this)->setMonitor(mon, mode);
 }
 
 WindowRenderer::Monitor WindowRenderer::getMonitor() const {
@@ -1741,7 +1713,7 @@ WindowRenderer::Monitor WindowRenderer::getPrimaryMonitor() {
 	return WindowRendererImpl::getPrimaryMonitor();
 }
 
-std::vector<WindowRenderer::Monitor> WindowRenderer::getMonitors() {
+Utils::BufferView<const WindowRenderer::Monitor> WindowRenderer::getMonitors() {
 	return WindowRendererImpl::getMonitors();
 }
 

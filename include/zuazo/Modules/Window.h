@@ -19,18 +19,10 @@ public:
 	static const Window& 				get();
 
 private:
-	using PollCallbacks = std::unordered_map<Instance*, std::shared_ptr<Instance::ScheduledCallback>>;
-
 	Window();
 	Window(const Window& other) = delete;
 
 	Window& 							operator=(const Window& other) = delete;
-
- 	mutable PollCallbacks				m_pollCallbacks;
-
-
-	virtual void 						initialize(Instance& instance) const override;
-	virtual void 						terminate(Instance& instance) const override;
 
 	virtual VulkanExtensions			getRequiredVulkanInstanceExtensions() const override;
 	virtual VulkanExtensions			getRequiredVulkanDeviceExtensions() const override;
@@ -41,8 +33,7 @@ private:
 
 
 	static std::unique_ptr<Window> 		s_singleton;
-
-	static void 						pollCallback(Instance& instance);
+	
 };
 
 }
