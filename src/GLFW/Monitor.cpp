@@ -7,6 +7,12 @@ Monitor::Monitor(MonitorHandle monitor)
 {
 }
 
+
+Monitor::operator MonitorHandle() noexcept {
+	return m_monitor;
+}
+
+
 void Monitor::setUserPointer(void* ptr) {
 	Instance::get().setUserPointer(m_monitor, ptr);
 }

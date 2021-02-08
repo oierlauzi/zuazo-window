@@ -32,6 +32,7 @@ namespace Zuazo::Consumers {
 
 struct WindowRendererImpl {
 	struct Open {
+		Instance& 									instance;
 		const Graphics::Vulkan&						vulkan;
 
 		GLFW::Window								window;
@@ -62,13 +63,14 @@ struct WindowRendererImpl {
 		Graphics::UniformBuffer						uniformBuffer;
 
 
-		Open(	const Graphics::Vulkan& vulkan,
+		Open(	Instance& instance,
 				Math::Vec2i size,
 				const std::string& title,
 				WindowRenderer::Monitor monitor,
 				WindowRendererImpl& impl,
 				const WindowRenderer::Camera& camera ) 
-			: vulkan(vulkan)
+			: instance(instance)
+			, vulkan(instance.getVulkan())
 			, window(createWindow(size, title, monitor, impl))
 			, surface(createSurface(vulkan, window))
 			, commandPool(createCommandPool(vulkan))
@@ -110,6 +112,11 @@ struct WindowRendererImpl {
 		~Open() {
 			uniformBuffer.waitCompletion(vulkan);
 			waitCompletion();
+
+			//Ensure that there are no pending events
+			const auto emitterId = getEmitterId(getUserPointer(window));
+			window = GLFW::Window(); //After this line no more events will be emitted
+			instance.removeEvent(emitterId); //Clean all pending events
 		}
 
 		void recreate(	vk::Extent2D ext, 
@@ -429,7 +436,7 @@ struct WindowRendererImpl {
 				windowFocusCallback,
 				windowIconifyCallback,
 				windowMaximizeCallback,
-				windowResolutionCallback,
+				nullptr,
 				windowScaleCallback,
 				windowKeyCallback,
 				windowCharCallback,
@@ -783,6 +790,7 @@ struct WindowRendererImpl {
 		, callbacks(std::move(callbacks))
 	{
 	}
+
 	~WindowRendererImpl() = default;
 
 
@@ -1241,7 +1249,7 @@ private:
 
 		//Try to open it
 		opened = std::make_unique<Open>(
-			window.getInstance().getVulkan(),
+			window.getInstance(),
 			size,
 			title,
 			monitor,
@@ -1304,6 +1312,10 @@ private:
 		}
 	}
 
+	void updateVideoMode() {
+		auto& window = owner.get();
+		window.setVideoModeCompatibility(getVideoModeCompatibility());
+	}
 
 	static std::tuple<vk::Extent2D, vk::Format, vk::ColorSpaceKHR, Graphics::OutputColorTransfer>
 	convertParameters(	const Graphics::Vulkan& vulkan,
@@ -1341,52 +1353,105 @@ private:
 
 
 	static WindowRendererImpl& getUserPointer(GLFW::WindowHandle win) {
-		GLFW::Instance::get().getUserPointer(win);
+		auto* usrPtr = static_cast<WindowRendererImpl*>(GLFW::Instance::get().getUserPointer(win));
+		assert(usrPtr);
+		return *usrPtr;
 	}
+
+	static size_t getEmitterId(const WindowRendererImpl& impl) {
+		return reinterpret_cast<uintptr_t>(&impl);
+	}
+
+	static constexpr auto invokeIf = [] (auto&& f, auto&& ...params) {
+		Utils::invokeIf(std::forward<decltype(f)>(f), std::forward<decltype(params)>(params)...);
+	};
 
 	static void windowPositionCallback(GLFW::WindowHandle win, int x, int y) {
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getPositionCallback()), std::ref(window), Math::Vec2i(x, y))
+		);
 	}
 
 	static void windowSizeCallback(GLFW::WindowHandle win, int x, int y) {
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getSizeCallback()), std::ref(window), Math::Vec2i(x, y))
+		);
 	}
 
 	static void windowCloseCallback(GLFW::WindowHandle win) {
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getCloseCallback()), std::ref(window))
+		);
 	}
 
 	static void windowRefreshCallback(GLFW::WindowHandle win) {
-		const auto& impl = getUserPointer(win);
+		auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(&WindowRendererImpl::updateVideoMode, std::ref(impl))
+		);
 	}
 
 	static void windowFocusCallback(GLFW::WindowHandle win, int focus) {
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getFocusCallback()), std::ref(window), focus)
+		);
 	}
 
 	static void windowIconifyCallback(GLFW::WindowHandle win, int iconify) {
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getIconifyCallback()), std::ref(window), iconify)
+		);
 	}
 
 	static void windowMaximizeCallback(GLFW::WindowHandle win, int maximized) {
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
-	}
-
-	static void windowResolutionCallback(GLFW::WindowHandle win, int x, int y) {
-		const auto& impl = getUserPointer(win);
-
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getMaximizeCallback()), std::ref(window), maximized)
+		);
 	}
 
 	static void windowScaleCallback(GLFW::WindowHandle win, float x, float y) {
 		const auto& impl = getUserPointer(win);
-
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
+		
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getScaleCallback()), std::ref(window), Math::Vec2f(x, y))
+		);
 	}
 
 	static void windowKeyCallback(	GLFW::WindowHandle win, 
@@ -1396,22 +1461,47 @@ private:
 									GLFW::KeyModifiers modifiers)
 	{
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
+		Utils::ignore(scancode); //TODO Not implemented
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getKeyboardCallback()), std::ref(window), fromGLFW(key), fromGLFW(event), fromGLFW(modifiers))
+		);
 	}
 
 	static void windowCharCallback(GLFW::WindowHandle win, unsigned int character) {
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getCharacterCallback()), std::ref(window), character)
+		);
 	}
 
 	static void windowMousePositionCallback(GLFW::WindowHandle win, double x, double y) {
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getMousePositionCallback()), std::ref(window), Math::Vec2d(x, y))
+		);
 	}
 
 	static void windowMouseEnterCallback(GLFW::WindowHandle win, int entered) {
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getCursorEnterCallback()), std::ref(window), entered)
+		);
 	}
 
 	static void windowMouseButtonCallback(	GLFW::WindowHandle win, 
@@ -1420,12 +1510,24 @@ private:
 											GLFW::KeyModifiers modifiers) 
 	{
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getMouseButtonCallback()), std::ref(window), fromGLFW(but), fromGLFW(event), fromGLFW(modifiers))
+		);
 	}
 
 	static void windowMouseScrollCallback(GLFW::WindowHandle win, double x, double y) {
 		const auto& impl = getUserPointer(win);
+		auto& window = static_cast<WindowRenderer&>(impl.owner);
+		auto& instance = window.getInstance();
 		
+		instance.addEvent(
+			getEmitterId(impl),
+			std::bind(invokeIf, std::cref(window.getMouseScrollCallback()), std::ref(window), Math::Vec2d(x, y))
+		);
 	}
 
 

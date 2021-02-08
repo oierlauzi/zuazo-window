@@ -7,6 +7,7 @@ namespace Zuazo::GLFW {
 
 class Window {
 public:
+	Window(WindowHandle handle = nullptr);
 	Window(	Math::Vec2i size, 
 			const char* name,
 			Monitor mon,
@@ -18,6 +19,8 @@ public:
 
 	Window&							operator=(const Window& other) = delete;
 	Window&							operator=(Window&& other);
+
+	operator WindowHandle() noexcept;
 
 	WindowPositionCallback			setPositionCallback(WindowPositionCallback cbk);
 	WindowSizeCallback				setSizeCallback(WindowSizeCallback cbk);

@@ -2,13 +2,18 @@
 
 namespace Zuazo::GLFW {
 
+Window::Window(WindowHandle handle)
+	: m_window(handle)
+	, m_windowedGeometry()
+{
+}
+
 Window::Window(	Math::Vec2i size, 
 				const char* name,
 				Monitor mon,
 				const WindowCallbacks& callbacks,
 				void* usrPtr )
-	: m_window(Instance::get().createWindow(size, name, reinterpret_cast<const MonitorHandle&>(mon), callbacks, usrPtr))
-	, m_windowedGeometry()
+	: Window(Instance::get().createWindow(size, name, reinterpret_cast<const MonitorHandle&>(mon), callbacks, usrPtr))
 {
 }
 
@@ -37,6 +42,11 @@ Window& Window::operator=(Window&& other) {
 	other.m_window = nullptr;
 
 	return *this;
+}
+
+
+Window::operator WindowHandle() noexcept {
+	return m_window;
 }
 
 

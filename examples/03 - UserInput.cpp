@@ -56,21 +56,26 @@ int main() {
 			std::cout << win.getName() << " moved: " << "[" << pos.x << ", " << pos.y << "]" << std::endl;
 		},
 		
-		//State Callback
-		[] (Zuazo::Consumers::WindowRenderer& win, Zuazo::Consumers::WindowRenderer::State state) {
-			//std::cout << win.getName() << " switched to state: " << Zuazo::toString(state) << std::endl; //TODO
+		//Iconify Callback
+		[] (Zuazo::Consumers::WindowRenderer& win, bool iconified) {
+			std::cout << win.getName() << " " << (iconified ? "iconified" : "not iconified") << std::endl;
+		},
+
+		//Maximize Callback
+		[] (Zuazo::Consumers::WindowRenderer& win, bool maximized) {
+			std::cout << win.getName() << " " << (maximized ? "maximized" : "not maximized") << std::endl;
+		},
+
+		//Focus Callback
+		[] (Zuazo::Consumers::WindowRenderer& win, bool focused) {
+			std::cout << win.getName() << " " << (focused ? "focused" : "not focused") << std::endl;
 		},
 
 		//Scale Callback
 		[] (Zuazo::Consumers::WindowRenderer& win, Zuazo::Math::Vec2f scale) {
 			std::cout << win.getName() << " changed scale: " << "[" << scale.x << ", " << scale.y << "]" << std::endl;
 		},
-
-		//Focus Callback
-		[] (Zuazo::Consumers::WindowRenderer& win, bool focus) {
-			std::cout << win.getName() << ( focus ? " has focus" : " has *NOT* focus" ) << std::endl;
-		},
-
+		
 		//ShouldClose Callback
 		[] (Zuazo::Consumers::WindowRenderer& win) {
 			std::cout << win.getName() << " should close" << std::endl;

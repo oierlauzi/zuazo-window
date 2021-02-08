@@ -12,6 +12,8 @@ public:
 
 	Monitor&							operator=(const Monitor& other) = default;
 
+	operator MonitorHandle() noexcept;
+
 	void								setUserPointer(void* ptr);
 	void*								getUserPointer() const;
 
