@@ -786,6 +786,7 @@ struct WindowRendererImpl {
 		, opacity(1.0f)
 		, resizeable(true)
 		, decorated(true)
+		, visible(true)
 		, monitor(mon)
 		, callbacks(std::move(callbacks))
 	{
