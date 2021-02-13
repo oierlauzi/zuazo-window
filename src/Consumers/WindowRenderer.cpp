@@ -210,7 +210,7 @@ struct WindowRendererImpl {
 
 				if(modifications.test(RECREATE_INTERMEDIATE_IMAGE)) {
 					const std::array planes = {
-						Graphics::Image::PlaneDescriptor{ extent, colorFormat, vk::ComponentMapping() }
+						Graphics::Image::Plane(Graphics::to3D(extent), colorFormat)
 					};
 
 					const auto oldIntermediateFormat = intermediateFormat;
@@ -252,7 +252,7 @@ struct WindowRendererImpl {
 
 				if(modifications.test(RECREATE_FRAMEBUFFERS)) {
 					if(renderPass.get() && swapchainImages.size()) {
-						framebuffers = createFramebuffers(vulkan, extent, swapchainImages, intermediateImage.get(), depthStencilImage.get(), renderPass);
+						framebuffers = createFramebuffers(vulkan, swapchainImages, intermediateImage.get(), depthStencilImage.get(), renderPass);
 					} else {
 						framebuffers.clear();
 					}
@@ -585,16 +585,17 @@ struct WindowRendererImpl {
 			std::vector<Graphics::Image> result;
 			result.reserve(images.size());
 
-			const std::array planes = {
-				Graphics::Image::PlaneDescriptor{ extent, format, vk::ComponentMapping() }	
-			};
-
 			for(size_t i = 0; i < images.size(); i++){
+				const std::array planes = {
+					Graphics::Image::Plane(Graphics::to3D(extent), format, vk::ComponentMapping(), images[i])
+				};
+
 				result.emplace_back(
 					vulkan,
 					planes,
-					images[i],
-					vk::ImageUsageFlagBits::eColorAttachment
+					vk::ImageUsageFlagBits::eColorAttachment,
+					vk::ImageTiling::eOptimal,
+					vk::MemoryPropertyFlags()
 				);
 			}
 
@@ -609,7 +610,7 @@ struct WindowRendererImpl {
 
 			if(format != vk::Format::eUndefined) {
 				const std::array planes = {
-					Graphics::Image::PlaneDescriptor{ extent, format, vk::ComponentSwizzle() }
+					Graphics::Image::Plane(Graphics::to3D(extent), format)
 				};
 
 				constexpr vk::ImageUsageFlags usage = 
@@ -650,11 +651,7 @@ struct WindowRendererImpl {
 														vk::Format depthStencilFormat )
 		{
 			const std::array planeDescriptors = {
-				Graphics::Image::PlaneDescriptor{
-					vk::Extent2D(),
-					colorFormat,
-					vk::ComponentMapping()
-				}
+				Graphics::Image::Plane(vk::Extent3D(), colorFormat)
 			};
 
 			return Graphics::RenderPass(
@@ -667,7 +664,6 @@ struct WindowRendererImpl {
 		}
 
 		static std::vector<Graphics::Framebuffer> createFramebuffers(	const Graphics::Vulkan& vulkan,
-																		vk::Extent2D extent,
 																		const std::vector<Graphics::Image>& swapchainImages,
 																		const Graphics::Image* intermediaryImage,
 																		const Graphics::DepthStencil* depthBufferImage,
@@ -679,7 +675,6 @@ struct WindowRendererImpl {
 			for(size_t i = 0; i < swapchainImages.size(); i++){
 				result.emplace_back(
 					vulkan,
-					Graphics::fromVulkan(extent),
 					swapchainImages[i],
 					intermediaryImage,
 					depthBufferImage,
@@ -1323,12 +1318,14 @@ private:
 						const Graphics::Frame::Descriptor& frameDescriptor )
 	{
 		//Obtain the pixel format
-		auto formats = Graphics::Frame::getPlaneDescriptors(frameDescriptor);
-		assert(formats.size() == 1);
+		auto planes = Graphics::Frame::getPlaneDescriptors(frameDescriptor);
+		assert(planes.size() == 1);
 
-		auto& fmt = formats[0];
-		std::tie(fmt.format, fmt.swizzle) = Graphics::optimizeFormat(std::make_tuple(fmt.format, fmt.swizzle));
-		assert(fmt.swizzle == vk::ComponentMapping());
+		auto& plane = planes.front();
+		const auto[format, swizzle] = Graphics::optimizeFormat(std::make_tuple(plane.getFormat(), plane.getSwizzle()));
+		plane.setFormat(format);
+		plane.setSwizzle(swizzle);
+		assert(plane.getSwizzle() == vk::ComponentMapping());
 
 		//Obtain the color space
 		const auto colorSpace = Graphics::toVulkan(
@@ -1342,11 +1339,11 @@ private:
 		constexpr vk::FormatFeatureFlags DESIRED_FLAGS = 
 			vk::FormatFeatureFlagBits::eColorAttachment;
 		const auto& supportedFormats = vulkan.listSupportedFormatsOptimal(DESIRED_FLAGS);
-		colorTransfer.optimize(formats, supportedFormats);
+		colorTransfer.optimize(planes, supportedFormats);
 
 		return std::make_tuple(
-			fmt.extent, 
-			fmt.format, 
+			Graphics::to2D(plane.getExtent()), 
+			plane.getFormat(), 
 			colorSpace, 
 			std::move(colorTransfer)
 		);
