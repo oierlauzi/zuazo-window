@@ -431,7 +431,7 @@ struct WindowRendererImpl {
 			const GLFW::WindowCallbacks callbacks = {
 				windowPositionCallback,
 				windowSizeCallback,
-				windowCloseCallback,
+				windowShouldCloseCallback,
 				windowRefreshCallback,
 				windowFocusCallback,
 				windowIconifyCallback,
@@ -794,54 +794,65 @@ struct WindowRendererImpl {
 		owner = static_cast<WindowRenderer&>(base);
 	}
 
-	void open(ZuazoBase& base) {
-		assert(!opened);
+	void open(ZuazoBase& base, std::unique_lock<Instance>* lock = nullptr) {
 		WindowRenderer& window = static_cast<WindowRenderer&>(base);
 		assert(&owner.get() == &window);
+		assert(!opened);
 
-		doOpen();
+		//Create it in a unlocked environment
+		if(lock) lock->unlock();
+		auto newOpened = std::make_unique<Open>(
+			window.getInstance(),
+			size,
+			title,
+			monitor,
+			*this,
+			window.getCamera()
+		);
+		
+		//Set everything as desired
+		//newOpened->window.setName(windowName); //Already set when constructing
+		//newOpened->window.setSize(size); //Already set when constructing
+		if(position != NO_POSTION) newOpened->window.setPosition(position);
+		newOpened->window.setOpacity(opacity);
+		newOpened->window.setResizeable(resizeable);
+		newOpened->window.setDecorated(decorated);
+		newOpened->window.setVisibility(visible);
+		if(lock) lock->lock();
+
+		//Write changes after locking back
+		opened = std::move(newOpened);
 		window.setVideoModeCompatibility(getVideoModeCompatibility());
 
 		hasChanged = true;
+
+		assert(opened);
 	}
 
 	void asyncOpen(ZuazoBase& base, std::unique_lock<Instance>& lock) {
-		assert(!opened);
-		WindowRenderer& window = static_cast<WindowRenderer&>(base);
-		assert(&owner.get() == &window);
-
-		lock.unlock(); //FIXME lock if doOpen throws
-		doOpen();
-		lock.lock();
-
-		window.setVideoModeCompatibility(getVideoModeCompatibility());
-
-		hasChanged = true;
+		assert(lock.owns_lock());
+		open(base, &lock);
 		assert(lock.owns_lock());
 	}
 
-	void close(ZuazoBase& base) {
-		assert(opened);
+	void close(ZuazoBase& base, std::unique_lock<Instance>* lock = nullptr) {
 		WindowRenderer& window = static_cast<WindowRenderer&>(base);
 		assert(&owner.get() == &window);
-
-		doClose();
+		assert(opened);
 
 		window.disablePeriodicUpdate();
-		window.setVideoModeCompatibility(getVideoModeCompatibility());
+		auto oldOpened = std::move(opened);
+
+		if(lock) lock->unlock();
+		oldOpened.reset();
+		if(lock) lock->lock();
+
+		assert(!opened);
 	}
 
 	void asyncClose(ZuazoBase& base, std::unique_lock<Instance>& lock) {
-		assert(opened);
-		WindowRenderer& window = static_cast<WindowRenderer&>(base);
-		assert(&owner.get() == &window);
-
-		lock.unlock();
-		doClose(); //FIXME lock if doOpen throws
-		lock.lock();
-
-		window.disablePeriodicUpdate();
-		window.setVideoModeCompatibility(getVideoModeCompatibility());
+		assert(lock.owns_lock());
+		close(base, &lock);
 		assert(lock.owns_lock());
 	}
 
@@ -1240,33 +1251,6 @@ struct WindowRendererImpl {
 	}
 
 private:
-	void doOpen() {
-		auto& window = owner.get();
-
-		//Try to open it
-		opened = std::make_unique<Open>(
-			window.getInstance(),
-			size,
-			title,
-			monitor,
-			*this,
-			window.getCamera()
-		);
-		
-		//Set everything as desired
-		//opened->window.setName(windowName); //Already set when constructing
-		//opened->window.setSize(size); //Already set when constructing
-		if(position != NO_POSTION) opened->window.setPosition(position);
-		opened->window.setOpacity(opacity);
-		opened->window.setResizeable(resizeable);
-		opened->window.setDecorated(decorated);
-		opened->window.setVisibility(visible);
-	}
-
-	void doClose() {
-		opened.reset();
-	}
-
 	void recreate(	WindowRenderer& window, 
 					const VideoMode& videoMode, 
 					const Utils::Limit<DepthStencilFormat>& depthStencil )
@@ -1386,14 +1370,14 @@ private:
 		);
 	}
 
-	static void windowCloseCallback(GLFW::WindowHandle win) {
+	static void windowShouldCloseCallback(GLFW::WindowHandle win) {
 		const auto& impl = getUserPointer(win);
 		auto& window = static_cast<WindowRenderer&>(impl.owner);
 		auto& instance = window.getInstance();
 
 		instance.addEvent(
 			getEmitterId(impl),
-			std::bind(invokeIf, std::cref(window.getCloseCallback()), std::ref(window))
+			std::bind(invokeIf, std::cref(window.getShouldCloseCallback()), std::ref(window))
 		);
 	}
 
@@ -1550,9 +1534,9 @@ WindowRenderer::WindowRenderer(	Instance& instance,
 		instance, std::move(name), 
 		{},
 		std::bind(&WindowRendererImpl::moved, std::ref(**this), std::placeholders::_1),
-		std::bind(&WindowRendererImpl::open, std::ref(**this), std::placeholders::_1),
+		std::bind(&WindowRendererImpl::open, std::ref(**this), std::placeholders::_1, nullptr),
 		std::bind(&WindowRendererImpl::asyncOpen, std::ref(**this), std::placeholders::_1, std::placeholders::_2),
-		std::bind(&WindowRendererImpl::close, std::ref(**this), std::placeholders::_1),
+		std::bind(&WindowRendererImpl::close, std::ref(**this), std::placeholders::_1, nullptr),
 		std::bind(&WindowRendererImpl::asyncClose, std::ref(**this), std::placeholders::_1, std::placeholders::_2),
 		std::bind(&WindowRendererImpl::update, std::ref(**this)) )
 	, VideoBase(
