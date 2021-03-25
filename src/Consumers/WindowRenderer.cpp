@@ -1260,6 +1260,7 @@ private:
 		if(opened) {
 			window.disablePeriodicUpdate();
 
+			Math::Vec2f viewportSize(0);
 			if(videoMode && depthStencil) {
 				const auto frameDesc = videoMode.getFrameDescriptor();
 				const auto depthStencilFormat = Graphics::toVulkan(depthStencil.value());
@@ -1276,6 +1277,8 @@ private:
 					window.getCamera()
 				);
 				window.enablePeriodicUpdate(PRIORITY, framePeriod);
+
+				viewportSize = Graphics::fromVulkan(extent);
 			} else {
 				//Unset the stuff
 				opened->recreate(
@@ -1287,6 +1290,9 @@ private:
 					window.getCamera()
 				);
 			}
+
+			//Update the viewport size
+			window.setViewportSize(viewportSize);
 
 			hasChanged = true;
 		}

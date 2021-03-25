@@ -63,7 +63,6 @@ int main(int argc, const char* argv[]) {
 	);
 
 	//Open the window (now becomes visible)
-	window.setResizeable(false); //Disable resizeing, as extra care needs to be taken
 	window.asyncOpen(lock);
 
 	//Create a layer for rendering to the window
@@ -71,7 +70,15 @@ int main(int argc, const char* argv[]) {
 		instance,
 		"Video Surface",
 		&window,
-		window.getVideoMode().getResolutionValue()
+		window.getViewportSize()
+	);
+
+	window.setViewportSizeCallback(
+		std::bind(
+			&Zuazo::Processors::Layers::VideoSurface::setSize, 
+			&videoSurface, 
+			std::placeholders::_2
+		)
 	);
 
 	window.setLayers({videoSurface});
