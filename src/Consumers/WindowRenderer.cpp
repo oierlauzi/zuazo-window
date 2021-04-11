@@ -772,8 +772,7 @@ struct WindowRendererImpl {
 	WindowRendererImpl(	WindowRenderer& owner,
 				Instance& instance,
 				Math::Vec2i size,
-				const WindowRenderer::Monitor& mon,
-				WindowRenderer::Callbacks callbacks)
+				const WindowRenderer::Monitor& mon )
 		: owner(owner)
 		, title(instance.getApplicationInfo().getName())
 		, size(size)
@@ -783,7 +782,7 @@ struct WindowRendererImpl {
 		, decorated(true)
 		, visible(true)
 		, monitor(mon)
-		, callbacks(std::move(callbacks))
+		, callbacks()
 	{
 	}
 
@@ -861,7 +860,7 @@ struct WindowRendererImpl {
 		recreate(window, videoMode, window.getDepthStencilFormat());
 	}
 
-	void setDepthStencilFormat(RendererBase& base, const Utils::Limit<DepthStencilFormat>& depthStencil) {
+	void setDepthStencilFormat(RendererBase& base, DepthStencilFormat depthStencil) {
 		auto& window = static_cast<WindowRenderer&>(base);
 		recreate(window, window.getVideoMode(), depthStencil);
 	}
@@ -1253,7 +1252,7 @@ struct WindowRendererImpl {
 private:
 	void recreate(	WindowRenderer& window, 
 					const VideoMode& videoMode, 
-					const Utils::Limit<DepthStencilFormat>& depthStencil )
+					DepthStencilFormat depthStencil )
 	{
 		assert(&owner.get() == &window);
 
@@ -1261,9 +1260,9 @@ private:
 			window.disablePeriodicUpdate();
 
 			Math::Vec2f viewportSize(0);
-			if(videoMode && depthStencil) {
+			if(videoMode) {
 				const auto frameDesc = videoMode.getFrameDescriptor();
-				const auto depthStencilFormat = Graphics::toVulkan(depthStencil.value());
+				const auto depthStencilFormat = Graphics::toVulkan(depthStencil);
 				const auto [extent, colorformat, colorSpace, colorTransfer] = convertParameters(window.getInstance().getVulkan(), frameDesc);
 				const auto framePeriod = getPeriod(videoMode.getFrameRateValue());
 
@@ -1530,12 +1529,9 @@ const WindowRenderer::Monitor WindowRenderer::NO_MONITOR = WindowRenderer::Monit
 
 WindowRenderer::WindowRenderer(	Instance& instance, 
 								std::string name, 
-								VideoMode videoMode,
-								Utils::Limit<DepthStencilFormat> depthStencil,
 								Math::Vec2i size,
-								const Monitor& mon,
-								Callbacks cbks )
-	: Utils::Pimpl<WindowRendererImpl>({}, *this, instance, size, mon, std::move(cbks))
+								const Monitor& mon )
+	: Utils::Pimpl<WindowRendererImpl>({}, *this, instance, size, mon)
 	, ZuazoBase(
 		instance, std::move(name), 
 		{},
@@ -1546,17 +1542,14 @@ WindowRenderer::WindowRenderer(	Instance& instance,
 		std::bind(&WindowRendererImpl::asyncClose, std::ref(**this), std::placeholders::_1, std::placeholders::_2),
 		std::bind(&WindowRendererImpl::update, std::ref(**this)) )
 	, VideoBase(
-		std::move(videoMode),
 		std::bind(&WindowRendererImpl::setVideoMode, std::ref(**this), std::placeholders::_1, std::placeholders::_2) )
 	, RendererBase(
-		std::move(depthStencil),
 		std::bind(&WindowRendererImpl::setDepthStencilFormat, std::ref(**this), std::placeholders::_1, std::placeholders::_2),
 		std::bind(&WindowRendererImpl::setCamera, std::ref(**this), std::placeholders::_1, std::placeholders::_2),
 		std::bind(&WindowRendererImpl::getRenderPass, std::ref(**this), std::placeholders::_1)
 	)
 {
 	setVideoModeCompatibility((*this)->getVideoModeCompatibility());
-	setDepthStencilFormatCompatibility((*this)->getDepthStencilFormatCompatibility());
 }
 
 WindowRenderer::WindowRenderer(WindowRenderer&& other) = default;

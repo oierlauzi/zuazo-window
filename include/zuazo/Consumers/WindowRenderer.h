@@ -91,11 +91,8 @@ public:
 
 	WindowRenderer(	Instance& instance, 
 					std::string name,
-					VideoMode videoMode = VideoMode::ANY,
-					Utils::Limit<DepthStencilFormat> depthStencil = Utils::Any<DepthStencilFormat>(),
-					Math::Vec2i size = Math::Vec2i(640, 480),
-					const Monitor& mon = NO_MONITOR,
-					Callbacks cbks = {} );
+					Math::Vec2i size,
+					const Monitor& mon = NO_MONITOR );
 	WindowRenderer(const WindowRenderer& other) = delete;
 	WindowRenderer(WindowRenderer&& other);
 	virtual ~WindowRenderer();

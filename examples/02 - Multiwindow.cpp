@@ -34,27 +34,6 @@ int main(int argc, const char* argv[]) {
 	Zuazo::Instance instance(std::move(appInfo));
 	std::unique_lock<Zuazo::Instance> lock(instance);
 
-	//Construct the desired parameters
-	const Zuazo::VideoMode videoMode(
-		Zuazo::Utils::MustBe<Zuazo::Rate>(Zuazo::Rate(25, 1)), //Just specify the desired rate
-		Zuazo::Utils::Any<Zuazo::Resolution>(),
-		Zuazo::Utils::Any<Zuazo::AspectRatio>(),
-		Zuazo::Utils::Any<Zuazo::ColorPrimaries>(),
-		Zuazo::Utils::Any<Zuazo::ColorModel>(),
-		Zuazo::Utils::Any<Zuazo::ColorTransferFunction>(),
-		Zuazo::Utils::Any<Zuazo::ColorSubsampling>(),
-		Zuazo::Utils::Any<Zuazo::ColorRange>(),
-		Zuazo::Utils::Any<Zuazo::ColorFormat>()	
-	);
-
-	const Zuazo::Utils::Limit<Zuazo::DepthStencilFormat> depthStencil(
-		Zuazo::Utils::MustBe<Zuazo::DepthStencilFormat>(Zuazo::DepthStencilFormat::NONE) //Not interested in the depth buffer
-	);
-
-	const auto windowSize = Zuazo::Math::Vec2i(1280, 720);
-
-	const auto& monitor = Zuazo::Consumers::WindowRenderer::NO_MONITOR; //Not interested in the full-screen mode
-
 	std::vector<Zuazo::Consumers::WindowRenderer> windows;
 	windows.reserve(windowCount);
 	for(size_t i = 0; i < windowCount; ++i) {
@@ -62,15 +41,21 @@ int main(int argc, const char* argv[]) {
 		windows.emplace_back(
 			instance, 								//Instance
 			"Output Window " + Zuazo::toString(i),	//Layout name
-			videoMode,								//Video mode limits
-			depthStencil,							//Depth buffer limits
-			windowSize,								//Window size (in screen coordinates)
-			monitor									//Monitor for setting fullscreen
+			Zuazo::Math::Vec2i(1280, 720)			//Window size (in screen coordinates)
+		);
+		auto& window = windows.back();
+
+		//Set the negotiation callback
+		window.setVideoModeNegotiationCallback(
+			[] (Zuazo::VideoBase&, const std::vector<Zuazo::VideoMode>& compatibility) -> Zuazo::VideoMode {
+				auto result = compatibility.front();
+				result.setFrameRate(Zuazo::Utils::MustBe<Zuazo::Rate>(result.getFrameRate().highest()));
+				return result;
+			}
 		);
 
 		//Configure it
-		auto& window = windows.back();
-		window.setWindowName(window.getName());
+		window.setTitle(window.getName());
 		window.setResizeable(false); //Disable resizeing, as extra care needs to be taken
 		window.asyncOpen(lock);
 	}
@@ -90,7 +75,7 @@ int main(int argc, const char* argv[]) {
 	);
 
 	videoSurface.setScalingMode(Zuazo::ScalingMode::BOXED);
-	videoSurface.setScalingFilter(Zuazo::ScalingFilter::CUBIC);
+	videoSurface.setScalingFilter(Zuazo::ScalingFilter::NEAREST);
 	videoSurface.asyncOpen(lock);
 
 	//Add the surface to all windows
@@ -102,7 +87,6 @@ int main(int argc, const char* argv[]) {
 	Zuazo::Sources::FFmpegClip videoClip(
 		instance,
 		"Video Source",
-		Zuazo::VideoMode::ANY,
 		filePath
 	);
 
