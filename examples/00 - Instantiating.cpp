@@ -68,7 +68,7 @@ int main(int argc, const char* argv[]) {
 
 	window.setLayers({videoSurface});
 	videoSurface.setScalingMode(Zuazo::ScalingMode::BOXED);
-	videoSurface.setScalingFilter(Zuazo::ScalingFilter::CUBIC);
+	videoSurface.setScalingFilter(Zuazo::ScalingFilter::NEAREST);
 	videoSurface.asyncOpen(lock);
 
 	//Create a video source
