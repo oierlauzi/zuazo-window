@@ -16,15 +16,15 @@
 #include <vector>
 #include <mutex>
 
-namespace Zuazo::Consumers{
+namespace Zuazo::Renderers {
 
-class WindowRenderer final
-	: public Utils::Pimpl<struct WindowRendererImpl>
+class Window final
+	: public Utils::Pimpl<struct WindowImpl>
 	, public ZuazoBase
 	, public VideoBase
 	, public RendererBase
 {
-	friend WindowRendererImpl;
+	friend WindowImpl;
 public:
 
 	class Monitor {
@@ -56,19 +56,19 @@ public:
 	};
 
 
-	using SizeCallback = std::function<void(WindowRenderer&, Math::Vec2i)>;
-	using PositionCallback = std::function<void(WindowRenderer&, Math::Vec2i)>;
-	using IconifyCallback = std::function<void(WindowRenderer&, bool)>;
-	using MaximizeCallback = std::function<void(WindowRenderer&, bool)>;
-	using FocusCallback = std::function<void(WindowRenderer&, bool)>;
-	using ScaleCallback = std::function<void(WindowRenderer&, Math::Vec2f)>;
-	using ShouldCloseCallback = std::function<void(WindowRenderer&)>;
-	using KeyboardCallback = std::function<void(WindowRenderer&, KeyboardKey, KeyEvent, KeyModifiers)>;
-	using CharacterCallback = std::function<void(WindowRenderer&, uint)>;
-	using MouseButtonCallback = std::function<void(WindowRenderer&, MouseKey, KeyEvent, KeyModifiers)>;
-	using MousePositionCallback = std::function<void(WindowRenderer&, Math::Vec2d)>;
-	using MouseScrollCallback = std::function<void(WindowRenderer&, Math::Vec2d)>;
-	using CursorEnterCallback = std::function<void(WindowRenderer&, bool)>;
+	using SizeCallback = std::function<void(Window&, Math::Vec2i)>;
+	using PositionCallback = std::function<void(Window&, Math::Vec2i)>;
+	using IconifyCallback = std::function<void(Window&, bool)>;
+	using MaximizeCallback = std::function<void(Window&, bool)>;
+	using FocusCallback = std::function<void(Window&, bool)>;
+	using ScaleCallback = std::function<void(Window&, Math::Vec2f)>;
+	using ShouldCloseCallback = std::function<void(Window&)>;
+	using KeyboardCallback = std::function<void(Window&, KeyboardKey, KeyEvent, KeyModifiers)>;
+	using CharacterCallback = std::function<void(Window&, uint)>;
+	using MouseButtonCallback = std::function<void(Window&, MouseKey, KeyEvent, KeyModifiers)>;
+	using MousePositionCallback = std::function<void(Window&, Math::Vec2d)>;
+	using MouseScrollCallback = std::function<void(Window&, Math::Vec2d)>;
+	using CursorEnterCallback = std::function<void(Window&, bool)>;
 
 
 	struct Callbacks {
@@ -89,16 +89,16 @@ public:
 
 
 
-	WindowRenderer(	Instance& instance, 
-					std::string name,
-					Math::Vec2i size,
-					const Monitor& mon = NO_MONITOR );
-	WindowRenderer(const WindowRenderer& other) = delete;
-	WindowRenderer(WindowRenderer&& other);
-	virtual ~WindowRenderer();
+	Window(	Instance& instance, 
+			std::string name,
+			Math::Vec2i size,
+			const Monitor& mon = NO_MONITOR );
+	Window(const Window& other) = delete;
+	Window(Window&& other);
+	virtual ~Window();
 
-	WindowRenderer&				operator=(const WindowRenderer& other) = delete;
-	WindowRenderer&				operator=(WindowRenderer&& other);
+	Window&						operator=(const Window& other) = delete;
+	Window&						operator=(Window&& other);
 
 	void						setTitle(std::string name);
 	const std::string&			getTitle() const;
