@@ -8,8 +8,8 @@
 #include <zuazo/Instance.h>
 #include <zuazo/Player.h>
 #include <zuazo/Modules/Window.h>
-#include <zuazo/Consumers/WindowRenderer.h>
-#include <zuazo/Processors/Layers/VideoSurface.h>
+#include <zuazo/Renderers/Window.h>
+#include <zuazo/Layers/VideoSurface.h>
 #include <zuazo/Sources/FFmpegClip.h>
 
 #include <mutex>
@@ -32,7 +32,7 @@ int main(int argc, const char* argv[]) {
 	std::unique_lock<Zuazo::Instance> lock(instance);
 
 	//Construct the window object
-	Zuazo::Consumers::WindowRenderer window(
+	Zuazo::Renderers::Window window(
 		instance, 						//Instance
 		"Output Window",				//Layout name
 		Zuazo::Math::Vec2i(1280, 720)	//Window size (in screen coordinates)
@@ -51,16 +51,15 @@ int main(int argc, const char* argv[]) {
 	window.asyncOpen(lock);
 
 	//Create a layer for rendering to the window
-	Zuazo::Processors::Layers::VideoSurface videoSurface(
+	Zuazo::Layers::VideoSurface videoSurface(
 		instance,
 		"Video Surface",
-		&window,
 		window.getViewportSize()
 	);
 
 	window.setViewportSizeCallback(
 		std::bind(
-			&Zuazo::Processors::Layers::VideoSurface::setSize, 
+			&Zuazo::Layers::VideoSurface::setSize, 
 			&videoSurface, 
 			std::placeholders::_2
 		)

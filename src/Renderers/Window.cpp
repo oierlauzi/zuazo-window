@@ -727,6 +727,8 @@ struct WindowImpl {
 		assert(opened);
 
 		window.disablePeriodicUpdate();
+		window.setViewportSize(Math::Vec2f());
+		window.setRenderPass(vk::RenderPass());
 		auto oldOpened = std::move(opened);
 
 		if(lock) lock->unlock();
@@ -760,12 +762,6 @@ struct WindowImpl {
 			opened->setCamera(camera);
 			hasChanged = true;
 		}
-	}
-
-	const Graphics::RenderPass& getRenderPass(const RendererBase& base) {
-		(void)(base);
-		static const Graphics::RenderPass NO_RENDER_PASS;
-		return opened ? opened->renderPass : NO_RENDER_PASS;
 	}
 
 	void update() {
@@ -1147,7 +1143,6 @@ private:
 		if(opened) {
 			window.disablePeriodicUpdate();
 
-			Math::Vec2f viewportSize(0);
 			if(videoMode) {
 				const auto frameDesc = videoMode.getFrameDescriptor();
 				auto [extent, colorFormat, colorSpace, colorTransfer] = convertParameters(window.getInstance().getVulkan(), frameDesc);
@@ -1164,8 +1159,6 @@ private:
 				);
 
 				window.enablePeriodicUpdate(PRIORITY, framePeriod);
-
-				viewportSize = Graphics::fromVulkan(extent);
 			} else {
 				//Unset the stuff
 				opened->recreate(
@@ -1178,8 +1171,9 @@ private:
 				);
 			}
 
-			//Update the viewport size
-			window.setViewportSize(viewportSize);
+			//Update the viewport size and the renderpass
+			window.setViewportSize(opened ? Graphics::fromVulkan(opened->extent)  : Math::Vec2i());
+			window.setRenderPass(opened ? opened->renderPass.get() : vk::RenderPass());
 
 			hasChanged = true;
 		}
@@ -1433,8 +1427,7 @@ Window::Window(	Instance& instance,
 		std::bind(&WindowImpl::setVideoMode, std::ref(**this), std::placeholders::_1, std::placeholders::_2) )
 	, RendererBase(
 		std::bind(&WindowImpl::setDepthStencilFormat, std::ref(**this), std::placeholders::_1, std::placeholders::_2),
-		std::bind(&WindowImpl::setCamera, std::ref(**this), std::placeholders::_1, std::placeholders::_2),
-		std::bind(&WindowImpl::getRenderPass, std::ref(**this), std::placeholders::_1)
+		std::bind(&WindowImpl::setCamera, std::ref(**this), std::placeholders::_1, std::placeholders::_2)
 	)
 {
 	setVideoModeCompatibility((*this)->getVideoModeCompatibility());

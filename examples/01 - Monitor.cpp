@@ -8,8 +8,8 @@
 #include <zuazo/Instance.h>
 #include <zuazo/Player.h>
 #include <zuazo/Modules/Window.h>
-#include <zuazo/Consumers/WindowRenderer.h>
-#include <zuazo/Processors/Layers/VideoSurface.h>
+#include <zuazo/Renderers/Window.h>
+#include <zuazo/Layers/VideoSurface.h>
 #include <zuazo/Sources/FFmpegClip.h>
 
 #include <mutex>
@@ -33,7 +33,7 @@ int main(int argc, const char* argv[]) {
 	std::unique_lock<Zuazo::Instance> lock(instance);
 
 	//Construct the window object
-	Zuazo::Consumers::WindowRenderer window(
+	Zuazo::Renderers::Window window(
 		instance, 						//Instance
 		"Output Window",				//Layout name
 		Zuazo::Math::Vec2i(1280, 720)	//Window size (in screen coordinates)
@@ -53,10 +53,9 @@ int main(int argc, const char* argv[]) {
 	window.asyncOpen(lock);
 
 	//Create a layer for rendering to the window
-	Zuazo::Processors::Layers::VideoSurface videoSurface(
+	Zuazo::Layers::VideoSurface videoSurface(
 		instance,
 		"Video Surface",
-		&window,
 		window.getVideoMode().getResolutionValue()
 	);
 
@@ -86,7 +85,7 @@ int main(int argc, const char* argv[]) {
 
 
 	//List all the monitors
-	const auto monitors = Zuazo::Consumers::WindowRenderer::getMonitors();
+	const auto monitors = Zuazo::Renderers::Window::getMonitors();
 	std::cout << "Available monitors:\n";
 	for(const auto& monitor : monitors) {
 		std::cout << "\t-" << monitor.getName() << "\n";
@@ -133,7 +132,7 @@ int main(int argc, const char* argv[]) {
 	lock.lock();
 
 	//Unset the fullscreen
-	window.setMonitor(Zuazo::Consumers::WindowRenderer::NO_MONITOR, nullptr);
+	window.setMonitor(Zuazo::Renderers::Window::NO_MONITOR, nullptr);
 	videoSurface.setSize(window.getVideoMode().getResolutionValue());
 
 	//Done!
