@@ -81,7 +81,7 @@ struct WindowImpl {
 			, colorFormat(vk::Format::eUndefined)
 			, colorSpace(static_cast<vk::ColorSpaceKHR>(-1))
 			, colorTransfer()
-			, depthStencilFormat(DepthStencilFormat::NONE)
+			, depthStencilFormat(DepthStencilFormat::none)
 			
 			, swapchain()
 			, swapchainImages()
@@ -653,7 +653,7 @@ struct WindowImpl {
 	bool										hasChanged;
 
 
-	static constexpr auto PRIORITY = Instance::OUTPUT_PRIORITY;
+	static constexpr auto PRIORITY = Instance::consumerPriority;
 	static constexpr auto NO_POSTION = Math::Vec2i(std::numeric_limits<int32_t>::min());
 
 	WindowImpl(	Window& owner,
@@ -788,10 +788,10 @@ struct WindowImpl {
 				Utils::MustBe<Resolution>(opened->window.getResolution()),
 				Utils::MustBe<AspectRatio>(AspectRatio(1, 1)),
 				Utils::Any<ColorPrimaries>(),
-				Utils::MustBe<ColorModel>(ColorModel::RGB),
+				Utils::MustBe<ColorModel>(ColorModel::rgb),
 				Utils::Any<ColorTransferFunction>(),
-				Utils::MustBe<ColorSubsampling>(ColorSubsampling::RB_444),
-				Utils::MustBe<ColorRange>(ColorRange::FULL),
+				Utils::MustBe<ColorSubsampling>(ColorSubsampling::rb444),
+				Utils::MustBe<ColorRange>(ColorRange::full),
 				Utils::Any<ColorFormat>()
 			);
 
@@ -805,10 +805,10 @@ struct WindowImpl {
 				const auto [format, colorTransferFunction2] = Graphics::fromVulkan(surfaceFormat.format);
 
 				//Evaluate if it is a valid option
-				if(	(colorPrimary != ColorPrimaries::NONE) &&
-					(colorTransferFunction != ColorTransferFunction::NONE) &&
-					(format != ColorFormat::NONE) &&
-					(colorTransferFunction2 == ColorTransferFunction::LINEAR) ) //To avoid duplicates
+				if(	(colorPrimary != ColorPrimaries::none) &&
+					(colorTransferFunction != ColorTransferFunction::none) &&
+					(format != ColorFormat::none) &&
+					(colorTransferFunction2 == ColorTransferFunction::linear) ) //To avoid duplicates
 				{
 					//Copy the base compatibility in order to modify it
 					VideoMode compatibility = baseCompatibility; 
@@ -833,7 +833,7 @@ struct WindowImpl {
 		assert(std::is_sorted(support.cbegin(), support.cend())); //For binary search
 
 		//Having no depth/stencil is supported:
-		result.emplace_back(DepthStencilFormat::NONE);
+		result.emplace_back(DepthStencilFormat::none);
 
 		//Test for each format
 		for(auto i = Utils::EnumTraits<DepthStencilFormat>::first(); i <= Utils::EnumTraits<DepthStencilFormat>::last(); ++i) {
@@ -1050,7 +1050,7 @@ struct WindowImpl {
 	KeyEvent getKeyState(KeyboardKey key) const {
 		return opened 
 		? fromGLFW(opened->window.getKeyState(toGLFW(key))) 
-		: KeyEvent::RELEASE;
+		: KeyEvent::release;
 	}
 
 	void setKeyboardCallback(Window::KeyboardCallback cbk) {
@@ -1074,7 +1074,7 @@ struct WindowImpl {
 	KeyEvent getMouseButtonState(MouseKey but) const {
 		return opened 
 		? fromGLFW(opened->window.getMouseButtonState(toGLFW(but)))
-		: KeyEvent::RELEASE;
+		: KeyEvent::release;
 	}
 
 	void setMouseButtonCallback(Window::MouseButtonCallback cbk) {
@@ -1166,7 +1166,7 @@ private:
 					vk::Format::eUndefined, 
 					static_cast<vk::ColorSpaceKHR>(-1), 
 					Graphics::ColorTransferWrite(), 
-					DepthStencilFormat::NONE,
+					DepthStencilFormat::none,
 					window.getCamera()
 				);
 			}
